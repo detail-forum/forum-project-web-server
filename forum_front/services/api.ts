@@ -3,7 +3,7 @@ import type { ApiResponse, LoginRequest, RegisterRequest, LoginResponse, PostLis
 
 // 프로덕션: 외부 서버 URL 사용
 // 개발 환경에서는 환경 변수로 localhost:8081 사용 가능
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://211.110.30.142/api'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

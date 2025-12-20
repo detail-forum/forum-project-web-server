@@ -65,6 +65,8 @@ public class SecurityConfig {
             "http://localhost:80",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:80",
+            "http://211.110.30.142",  // 프로덕션 서버 IP
+            "http://211.110.30.142:80",
             "http://*",  // 모든 HTTP 도메인 허용 (프로덕션 환경 대응)
             "https://*"  // 모든 HTTPS 도메인 허용 (프로덕션 환경 대응)
         ));

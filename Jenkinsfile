@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   options {
-    skipDefaultCheckout(true)  // ✅ 중복 checkout 방지
+    skipDefaultCheckout(true)
     timestamps()
   }
 
@@ -92,19 +92,49 @@ pipeline {
       }
     }
 
-    stage('배포') {
+stage('배포') {
+  when {
+    expression {
+      def b = (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '')
+      return b.contains('main') || b.contains('master')
+    }
+  }
   steps {
     bat """
-      net stop forum-backend
-      net start forum-backend
-      net stop forum-frontend
-      net start forum-frontend
+      echo ===== 1) 기존 백엔드(8081) 프로세스 종료 =====
+      for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8081 ^| findstr LISTENING') do (
+        echo kill PID=%%a
+        taskkill /F /PID %%a
+      )
 
-      "${NGINX_HOME}\\nginx.exe" -t
-      "${NGINX_HOME}\\nginx.exe" -s reload
+      echo ===== 2) 기존 프론트(3000) 프로세스 종료 =====
+      for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3000 ^| findstr LISTENING') do (
+        echo kill PID=%%a
+        taskkill /F /PID %%a
+      )
+
+      echo ===== 3) 백엔드 재실행 (백그라운드) =====
+      if not exist "${DEPLOY_BACKEND_DIR}\\logs" mkdir "${DEPLOY_BACKEND_DIR}\\logs"
+      start "forum-backend" /B cmd /c ^
+        "cd /d ${DEPLOY_BACKEND_DIR} && java -jar app.jar > logs\\backend.log 2>&1"
+
+      echo ===== 4) 프론트 재실행 (백그라운드) =====
+      if not exist "${DEPLOY_FRONT_DIR}\\logs" mkdir "${DEPLOY_FRONT_DIR}\\logs"
+      start "forum-frontend" /B cmd /c ^
+        "cd /d ${DEPLOY_FRONT_DIR} && npm install --omit=dev && npm run start -- -p 3000 > logs\\frontend.log 2>&1"
+
+      echo ===== 5) Nginx 설정 테스트 & 리로드 =====
+      cd /d "${NGINX_HOME}"
+      nginx.exe -t
+      nginx.exe -s reload
+
+      echo ===== 6) 포트 상태 확인 =====
+      netstat -ano | findstr :8081
+      netstat -ano | findstr :3000
     """
   }
 }
+
 
   }
 

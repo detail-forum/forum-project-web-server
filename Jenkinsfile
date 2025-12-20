@@ -15,8 +15,8 @@ pipeline {
     DEPLOY_BACKEND_DIR = 'C:\\deploy\\forum\\backend'
     DEPLOY_FRONT_DIR   = 'C:\\deploy\\forum\\frontend'
 
-    // Nginx 경로 (실제 경로에 맞게 수정 필요)
-    NGINX_HOME = 'C:\\nginx'
+    // Nginx 경로 (실제 경로에 맞게 수정 필요, PATH에 있으면 빈 값으로 두기)
+    NGINX_HOME = ''
 
     // Next.js telemetry 끄기
     NEXT_TELEMETRY_DISABLED = '1'
@@ -102,13 +102,14 @@ pipeline {
         bat """
           echo ===== 빌드 결과물 복사 =====
           
-          REM 백엔드 JAR 파일 복사 (최신 jar를 app.jar로 통일)
+          REM 백엔드 JAR 파일 복사 (plain JAR 제외하고 실행 가능한 JAR만 복사)
           echo 백엔드 JAR 복사 중...
-          for %%F in (forum_server\\build\\libs\\*.jar) do (
-            if not "%%~nxF"=="api_practice-0.0.1-SNAPSHOT-plain.jar" (
-              copy /Y "%%F" "${DEPLOY_BACKEND_DIR}\\app.jar"
-              echo 복사 완료: %%F -> app.jar
-            )
+          if exist "forum_server\\build\\libs\\api_practice-0.0.1-SNAPSHOT.jar" (
+            copy /Y "forum_server\\build\\libs\\api_practice-0.0.1-SNAPSHOT.jar" "${DEPLOY_BACKEND_DIR}\\app.jar"
+            echo Copied: api_practice-0.0.1-SNAPSHOT.jar to app.jar
+          ) else (
+            echo [ERROR] JAR 파일을 찾을 수 없습니다!
+            exit /b 1
           )
           
           REM 프론트엔드 빌드 결과 복사
@@ -149,7 +150,8 @@ pipeline {
             echo 종료할 PID: %%a
             taskkill /F /PID %%a 2>nul || echo PID %%a 종료 실패 또는 이미 종료됨
           )
-          timeout /t 2 /nobreak >nul
+          REM 대기 (ping을 사용하여 2초 대기)
+          ping 127.0.0.1 -n 3 >nul
           
           REM 2) 기존 프론트엔드(3000) 프로세스 종료
           echo [2/6] 기존 프론트엔드 프로세스 종료 중...
@@ -157,14 +159,16 @@ pipeline {
             echo 종료할 PID: %%a
             taskkill /F /PID %%a 2>nul || echo PID %%a 종료 실패 또는 이미 종료됨
           )
-          timeout /t 2 /nobreak >nul
+          REM 대기 (ping을 사용하여 2초 대기)
+          ping 127.0.0.1 -n 3 >nul
           
           REM 3) 백엔드 재실행 (백그라운드)
           echo [3/6] 백엔드 서버 시작 중...
           if not exist "${DEPLOY_BACKEND_DIR}\\logs" mkdir "${DEPLOY_BACKEND_DIR}\\logs"
           cd /d "${DEPLOY_BACKEND_DIR}"
           start "forum-backend" /B cmd /c "java -jar app.jar > logs\\backend.log 2>&1"
-          timeout /t 5 /nobreak >nul
+          REM 대기 (ping을 사용하여 5초 대기)
+          ping 127.0.0.1 -n 6 >nul
           
           REM 4) 프론트엔드 재실행 (백그라운드)
           echo [4/6] 프론트엔드 서버 시작 중...
@@ -176,23 +180,46 @@ pipeline {
             call npm install --omit=dev --production
           )
           start "forum-frontend" /B cmd /c "npm run start -- -p 3000 > logs\\frontend.log 2>&1"
-          timeout /t 5 /nobreak >nul
+          REM 대기 (ping을 사용하여 5초 대기)
+          ping 127.0.0.1 -n 6 >nul
           
           REM 5) Nginx 설정 테스트 및 리로드
           echo [5/6] Nginx 설정 확인 및 리로드 중...
-          cd /d "${NGINX_HOME}"
-          nginx.exe -t
+          REM 먼저 PATH에서 Nginx 찾기
+          where nginx.exe >nul 2>&1
           if %ERRORLEVEL% EQU 0 (
-            nginx.exe -s reload
-            echo Nginx 리로드 완료
+            REM Nginx가 PATH에 있는 경우
+            nginx.exe -t >nul 2>&1
+            if %ERRORLEVEL% EQU 0 (
+              nginx.exe -s reload
+              echo Nginx 리로드 완료
+            ) else (
+              echo [WARN] Nginx 설정 파일에 오류가 있습니다. 계속 진행합니다.
+            )
           ) else (
-            echo [ERROR] Nginx 설정 파일에 오류가 있습니다!
-            exit /b 1
+            REM PATH에 없으면 환경 변수 경로 확인
+            if not "${NGINX_HOME}"=="" (
+              if exist "${NGINX_HOME}\\nginx.exe" (
+                cd /d "${NGINX_HOME}"
+                nginx.exe -t >nul 2>&1
+                if %ERRORLEVEL% EQU 0 (
+                  nginx.exe -s reload
+                  echo Nginx 리로드 완료
+                ) else (
+                  echo [WARN] Nginx 설정 파일에 오류가 있습니다. 계속 진행합니다.
+                )
+              ) else (
+                echo [INFO] Nginx를 찾을 수 없습니다. Nginx 리로드를 건너뜁니다.
+              )
+            ) else (
+              echo [INFO] Nginx 경로가 설정되지 않았습니다. Nginx 리로드를 건너뜁니다.
+            )
           )
           
           REM 6) 포트 상태 확인
           echo [6/6] 서비스 상태 확인 중...
-          timeout /t 3 /nobreak >nul
+          REM 대기 (ping을 사용하여 3초 대기)
+          ping 127.0.0.1 -n 4 >nul
           netstat -ano | findstr :8081 && echo [OK] 백엔드(8081) 실행 중 || echo [WARN] 백엔드(8081) 아직 시작되지 않음
           netstat -ano | findstr :3000 && echo [OK] 프론트엔드(3000) 실행 중 || echo [WARN] 프론트엔드(3000) 아직 시작되지 않음
           

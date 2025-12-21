@@ -40,8 +40,26 @@ pipeline {
                         node -v
                         npm -v
 
-                        npm ci
-                        npm run build
+                        echo Installing dependencies...
+                        call npm ci
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo [ERROR] npm ci failed!
+                            exit /b 1
+                        )
+
+                        echo Building Next.js application...
+                        call npm run build
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo [ERROR] npm run build failed!
+                            exit /b 1
+                        )
+
+                        echo Verifying build output...
+                        if not exist ".next" (
+                            echo [ERROR] .next directory not found after build!
+                            exit /b 1
+                        )
+                        echo Frontend build completed successfully
                     '''
                 }
             }
@@ -90,25 +108,54 @@ pipeline {
                     )
 
                     echo --- Frontend Source ---
+                    REM 빌드 결과물 확인
+                    if not exist "forum_front\\.next" (
+                        echo [ERROR] .next directory not found! Frontend build may have failed.
+                        exit /b 1
+                    )
+                    if not exist "forum_front\\node_modules" (
+                        echo [ERROR] node_modules not found! npm ci may have failed.
+                        exit /b 1
+                    )
+
                     rmdir /S /Q "%DEPLOY_FRONTEND%"
                     mkdir "%DEPLOY_FRONTEND%"
 
                     REM 필수 파일 및 디렉토리 복사
+                    echo Copying .next directory...
                     xcopy /E /I /Y forum_front\\.next "%DEPLOY_FRONTEND%\\.next"
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo [ERROR] Failed to copy .next directory
+                        exit /b 1
+                    )
+
+                    echo Copying public directory...
                     xcopy /E /I /Y forum_front\\public "%DEPLOY_FRONTEND%\\public"
+
+                    echo Copying node_modules...
                     xcopy /E /I /Y forum_front\\node_modules "%DEPLOY_FRONTEND%\\node_modules"
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo [ERROR] Failed to copy node_modules
+                        exit /b 1
+                    )
+
+                    echo Copying configuration files...
                     copy /Y forum_front\\package.json "%DEPLOY_FRONTEND%\\package.json"
                     copy /Y forum_front\\package-lock.json "%DEPLOY_FRONTEND%\\package-lock.json" 2>nul
                     if exist forum_front\\next.config.js copy /Y forum_front\\next.config.js "%DEPLOY_FRONTEND%\\next.config.js"
                     if exist forum_front\\tsconfig.json copy /Y forum_front\\tsconfig.json "%DEPLOY_FRONTEND%\\tsconfig.json"
+                    if exist forum_front\\tailwind.config.js copy /Y forum_front\\tailwind.config.js "%DEPLOY_FRONTEND%\\tailwind.config.js"
+                    if exist forum_front\\postcss.config.js copy /Y forum_front\\postcss.config.js "%DEPLOY_FRONTEND%\\postcss.config.js"
+
+                    echo Copying source directories...
                     xcopy /E /I /Y forum_front\\app "%DEPLOY_FRONTEND%\\app"
                     xcopy /E /I /Y forum_front\\components "%DEPLOY_FRONTEND%\\components"
                     xcopy /E /I /Y forum_front\\services "%DEPLOY_FRONTEND%\\services"
                     xcopy /E /I /Y forum_front\\store "%DEPLOY_FRONTEND%\\store"
                     xcopy /E /I /Y forum_front\\types "%DEPLOY_FRONTEND%\\types"
                     xcopy /E /I /Y forum_front\\utils "%DEPLOY_FRONTEND%\\utils"
-                    if exist forum_front\\tailwind.config.js copy /Y forum_front\\tailwind.config.js "%DEPLOY_FRONTEND%\\tailwind.config.js"
-                    if exist forum_front\\postcss.config.js copy /Y forum_front\\postcss.config.js "%DEPLOY_FRONTEND%\\postcss.config.js"
+
+                    echo Frontend artifacts copied successfully
                 '''
             }
         }
@@ -120,14 +167,39 @@ pipeline {
             steps {
                 bat '''
                     echo ===== Restart Services =====
+                    
+                    REM Backend 재시작
+                    echo Restarting backend service...
                     "%NSSM%" restart forum-backend
-                    "%NSSM%" start forum-frontend
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo [WARN] Backend restart may have failed, trying start...
+                        "%NSSM%" start forum-backend
+                    )
 
+                    REM Frontend 시작
+                    echo Starting frontend service...
+                    "%NSSM%" start forum-frontend
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo [ERROR] Failed to start frontend service!
+                        echo Checking frontend directory...
+                        dir "%DEPLOY_FRONTEND%"
+                        exit /b 1
+                    )
+
+                    echo Waiting for services to start...
                     ping 127.0.0.1 -n 6 > nul
 
                     echo ===== Service Status Check =====
                     netstat -ano | findstr :8081 && echo [OK] Backend(8081) is running || echo [WARN] Backend(8081) not started
                     netstat -ano | findstr :3000 && echo [OK] Frontend(3000) is running || echo [WARN] Frontend(3000) not started
+                    
+                    REM Frontend가 시작되지 않았으면 로그 확인
+                    if not exist "%DEPLOY_FRONTEND%\\.next" (
+                        echo [ERROR] .next directory missing in deploy folder!
+                    )
+                    if not exist "%DEPLOY_FRONTEND%\\node_modules" (
+                        echo [ERROR] node_modules missing in deploy folder!
+                    )
                 '''
             }
         }

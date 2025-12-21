@@ -35,35 +35,40 @@ pipeline {
         stage('Frontend Build') {
             steps {
                 dir('forum_front') {
-                    bat '''
-                        @echo off
-                        echo ===== Frontend Build =====
-                        echo.
+                    powershell '''
+                        Write-Host "===== Frontend Build =====" -ForegroundColor Cyan
+                        Write-Host ""
+                        
+                        Write-Host "Node.js version:" -ForegroundColor Yellow
                         node -v
+                        Write-Host "npm version:" -ForegroundColor Yellow
                         npm -v
-                        echo.
-                        echo Installing dependencies...
+                        Write-Host ""
+                        
+                        Write-Host "Installing dependencies..." -ForegroundColor Yellow
                         npm ci
-                        if errorlevel 1 (
-                            echo [ERROR] npm ci failed!
-                            exit /b 1
-                        )
-                        echo.
-                        echo Building Next.js application...
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Host "[ERROR] npm ci failed!" -ForegroundColor Red
+                            exit 1
+                        }
+                        Write-Host ""
+                        
+                        Write-Host "Building Next.js application..." -ForegroundColor Yellow
                         npm run build
-                        if errorlevel 1 (
-                            echo [ERROR] npm run build failed!
-                            exit /b 1
-                        )
-                        echo.
-                        echo Verifying build output...
-                        if not exist ".next" (
-                            echo [ERROR] .next directory not found after build!
-                            dir
-                            exit /b 1
-                        )
-                        echo.
-                        echo Frontend build completed successfully
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Host "[ERROR] npm run build failed!" -ForegroundColor Red
+                            exit 1
+                        }
+                        Write-Host ""
+                        
+                        Write-Host "Verifying build output..." -ForegroundColor Yellow
+                        if (-not (Test-Path ".next")) {
+                            Write-Host "[ERROR] .next directory not found after build!" -ForegroundColor Red
+                            Get-ChildItem
+                            exit 1
+                        }
+                        Write-Host ""
+                        Write-Host "Frontend build completed successfully" -ForegroundColor Green
                     '''
                 }
             }

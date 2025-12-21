@@ -10,14 +10,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/post")
+@RequestMapping("/post")
 @AllArgsConstructor
 public class PostController {
 
     private final PostService postService;
 
     /** ✅ 내 게시글 목록 조회 */
-    // GET http://localhost:8080/api/post/my-post?sortType=RESENT
+    // GET http://localhost:8081/post/my-post?sortType=RESENT
     @GetMapping("/my-post")
     public ResponseEntity<ApiResponse<Page<PostListDTO>>> getMyPostList(
             Pageable pageable,
@@ -28,7 +28,7 @@ public class PostController {
     }
 
     /** ✅ 전체 게시글 목록 조회 */
-    // GET http://localhost:8080/api/post?sortType=HITS
+    // GET http://localhost:8081/post?sortType=HITS
     @GetMapping
     public ResponseEntity<ApiResponse<Page<PostListDTO>>> getPostList(
             Pageable pageable,
@@ -39,7 +39,7 @@ public class PostController {
     }
 
     /** ✅ 글 등록 */
-    // POST http://localhost:8080/api/post
+    // POST http://localhost:8081/post
     @PostMapping
     public ResponseEntity<ApiResponse<Void>> create(@Valid @RequestBody CreatePost dto) {
         postService.savePost(dto);
@@ -47,7 +47,7 @@ public class PostController {
     }
 
     /** ✅ 단건 조회 */
-    // GET http://localhost:8080/api/post/{id}
+    // GET http://localhost:8081/post/{id}
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<PostDetailDTO>> getPost(@PathVariable Long id) {
         PostDetailDTO detail = postService.getPostDetail(id);
@@ -55,7 +55,7 @@ public class PostController {
     }
 
     /** ✅ 삭제 */
-    // DELETE http://localhost:8080/api/post/{id}
+    // DELETE http://localhost:8081/post/{id}
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable long id) {
         postService.deletePost(id);
@@ -63,7 +63,7 @@ public class PostController {
     }
 
     /** ✅ 수정 */
-    // PATCH http://localhost:8080/api/post/{id}
+    // PATCH http://localhost:8081/post/{id}
     @PatchMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> patchPost(
             @PathVariable long id,

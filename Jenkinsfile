@@ -36,41 +36,33 @@ pipeline {
             steps {
                 dir('forum_front') {
                     bat '''
-                        @echo on
+                        @echo off
                         echo ===== Frontend Build =====
-                        
-                        REM Node.js 경로 설정
-                        set NODE_HOME=C:\\Program Files\\nodejs
-                        set PATH=%NODE_HOME%;%PATH%
-                        
-                        REM Node.js 및 npm 버전 확인
+                        echo.
                         node -v
                         npm -v
-                        
-                        REM 의존성 설치
+                        echo.
                         echo Installing dependencies...
-                        call npm ci
+                        npm ci
                         if errorlevel 1 (
                             echo [ERROR] npm ci failed!
                             exit /b 1
                         )
-                        
-                        REM Next.js 빌드
+                        echo.
                         echo Building Next.js application...
-                        call npm run build
+                        npm run build
                         if errorlevel 1 (
                             echo [ERROR] npm run build failed!
                             exit /b 1
                         )
-                        
-                        REM 빌드 결과 확인
+                        echo.
                         echo Verifying build output...
                         if not exist ".next" (
                             echo [ERROR] .next directory not found after build!
                             dir
                             exit /b 1
                         )
-                        
+                        echo.
                         echo Frontend build completed successfully
                     '''
                 }

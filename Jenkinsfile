@@ -6,26 +6,40 @@ pipeline {
     }
 
     environment {
+        // 배포 경로
         DEPLOY_ROOT     = 'C:\\deploy\\forum'
         DEPLOY_BACKEND  = 'C:\\deploy\\forum\\backend'
         DEPLOY_FRONTEND = 'C:\\deploy\\forum\\frontend'
-        NSSM            = 'C:\\nssm\\nssm.exe'
+
+        // NSSM 경로
+        NSSM = 'C:\\nssm\\nssm.exe'
+
+        // Next.js 텔레메트리 비활성화
         NEXT_TELEMETRY_DISABLED = '1'
     }
 
     stages {
 
+        /* =========================
+           1. Git Checkout
+        ========================= */
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
+        /* =========================
+           2. Frontend Build (Next.js)
+        ========================= */
         stage('Frontend Build') {
             steps {
                 dir('forum_front') {
                     bat '''
                         echo ===== Frontend Build =====
+                        node -v
+                        npm -v
+
                         npm ci
                         npm run build
                     '''
@@ -33,6 +47,9 @@ pipeline {
             }
         }
 
+        /* =========================
+           3. Backend Build (Spring)
+        ========================= */
         stage('Backend Build') {
             steps {
                 dir('forum_server') {
@@ -44,9 +61,16 @@ pipeline {
             }
         }
 
+        /* =========================
+           4. Copy Artifacts
+           - frontend: 전체 소스 + .next
+           - backend : 실행 JAR
+        ========================= */
         stage('Copy Artifacts') {
             steps {
                 bat '''
+                    echo ===== Copy Artifacts =====
+
                     if not exist "%DEPLOY_BACKEND%"  mkdir "%DEPLOY_BACKEND%"
                     if not exist "%DEPLOY_FRONTEND%" mkdir "%DEPLOY_FRONTEND%"
 
@@ -55,22 +79,23 @@ pipeline {
                         copy /Y "%%f" "%DEPLOY_BACKEND%\\app.jar"
                     )
 
-                    echo --- Frontend ---
-                    if exist forum_front\\.next (
-                        xcopy /E /I /Y forum_front\\.next "%DEPLOY_FRONTEND%\\.next"
-                    )
-                    if exist forum_front\\public (
-                        xcopy /E /I /Y forum_front\\public "%DEPLOY_FRONTEND%\\public"
-                    )
-                    copy /Y forum_front\\package.json "%DEPLOY_FRONTEND%\\package.json"
+                    echo --- Frontend Source ---
+                    rmdir /S /Q "%DEPLOY_FRONTEND%"
+                    mkdir "%DEPLOY_FRONTEND%"
+
+                    xcopy /E /I /Y forum_front "%DEPLOY_FRONTEND%"
                 '''
             }
         }
 
+        /* =========================
+           5. Restart Services (NSSM)
+        ========================= */
         stage('Restart Services (NSSM)') {
             steps {
                 bat '''
                     echo ===== Restart NSSM Services =====
+
                     "%NSSM%" restart forum-backend
                     "%NSSM%" restart forum-frontend
 
@@ -83,7 +108,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Build & Restart SUCCESS'
+            echo '✅ Build & Deploy SUCCESS'
         }
         failure {
             echo '❌ Build FAILED'

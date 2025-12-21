@@ -35,10 +35,26 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// 응답 인터셉터: 401 처리
+// 응답 인터셉터: 에러 처리
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    // 에러 상세 정보 로깅
+    if (error.response) {
+      console.error('API Error:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response.data,
+      })
+    } else if (error.request) {
+      console.error('Network Error:', error.request)
+    } else {
+      console.error('Error:', error.message)
+    }
+
+    // 401 에러 처리
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')

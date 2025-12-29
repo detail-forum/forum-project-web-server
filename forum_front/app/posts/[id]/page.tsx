@@ -44,9 +44,33 @@ export default function PostDetailPage() {
 
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), 'yyyy년 MM월 dd일 HH:mm', { locale: ko })
+      if (!dateString) return ''
+      const date = new Date(dateString)
+      // 유효하지 않은 날짜 체크 (1970년 이전이거나 미래 날짜는 무시)
+      if (isNaN(date.getTime()) || date.getTime() < 0 || date.getTime() > Date.now() + 86400000) {
+        return ''
+      }
+      return format(date, 'yyyy년 MM월 dd일 HH:mm', { locale: ko })
     } catch {
-      return dateString
+      return ''
+    }
+  }
+
+  // 수정일이 유효하고 작성일과 다른지 확인
+  const hasValidUpdateDate = () => {
+    if (!post) return false
+    if (!post.updateDateTime) return false
+    if (post.updateDateTime === post.createDateTime) return false
+    
+    try {
+      const updateDate = new Date(post.updateDateTime)
+      const createDate = new Date(post.createDateTime)
+      // 유효한 날짜이고 작성일과 다른 경우만 true
+      return !isNaN(updateDate.getTime()) && 
+             updateDate.getTime() > 0 && 
+             updateDate.getTime() !== createDate.getTime()
+    } catch {
+      return false
     }
   }
 
@@ -88,7 +112,7 @@ export default function PostDetailPage() {
                 </div>
                 <div className="flex flex-col items-end">
                   <span>작성일: {formatDate(post.createDateTime)}</span>
-                  {post.updateDateTime !== post.createDateTime && (
+                  {hasValidUpdateDate() && (
                     <span className="text-xs">수정일: {formatDate(post.updateDateTime)}</span>
                   )}
                 </div>

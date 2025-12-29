@@ -56,8 +56,12 @@ public class PostService {
             throw new ResourceNotFoundException("삭제된 게시글입니다.");
         }
 
-        post.setViews(post.getViews() + 1);
-        postRepository.save(post); // 조회수 증가 후 저장
+        // 조회수 증가 (updatedTime은 변경하지 않음)
+        postRepository.incrementViews(id);
+        
+        // 조회수 증가 후 다시 조회하여 정확한 값 가져오기
+        post = postRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("게시글을 찾을 수 없습니다."));
 
         return PostDetailDTO.builder()
                 .title(post.getTitle())

@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+
 public interface PostRepository extends JpaRepository<Post, Long> {
 
     Page<Post> findAllByIsDeletedFalseOrderByCreatedTimeDesc(Pageable pageable);
@@ -20,4 +22,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Modifying
     @Query("UPDATE Post p SET p.views = p.views + 1 WHERE p.id = :id")
     void incrementViews(@Param("id") Long id);
+
+    // 수정 시간 업데이트 (명시적으로)
+    @Modifying
+    @Query("UPDATE Post p SET p.updatedTime = :updateTime WHERE p.id = :id")
+    void updateModifiedTime(@Param("id") Long id, @Param("updateTime") LocalDateTime updateTime);
 }

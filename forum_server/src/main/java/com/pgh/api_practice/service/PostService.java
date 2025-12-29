@@ -210,11 +210,24 @@ public class PostService {
 
         // 변경사항이 있을 때만 저장
         if (isModified) {
-            // 명시적으로 수정 시간 설정 (LastModifiedDate가 제대로 작동하지 않을 경우 대비)
-            post.setUpdatedTime(LocalDateTime.now());
+            // @LastModifiedDate가 자동으로 업데이트되도록 save 호출
+            // 명시적으로 setUpdatedTime을 호출하지 않음 (JPA Auditing이 자동 처리)
             postRepository.save(post);
-            // 저장 후 플러시하여 DB에 반영
+            // 저장 후 플러시하여 DB에 즉시 반영
             postRepository.flush();
+            
+            // 저장 후 다시 조회하여 @LastModifiedDate가 제대로 적용되었는지 확인
+            Post savedPost = postRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("게시글을 찾을 수 없습니다."));
+            
+            // 만약 @LastModifiedDate가 작동하지 않았다면 명시적으로 설정
+            if (savedPost.getUpdatedTime() == null || 
+                savedPost.getUpdatedTime().equals(savedPost.getCreatedTime()) ||
+                savedPost.getUpdatedTime().isBefore(savedPost.getCreatedTime())) {
+                savedPost.setUpdatedTime(LocalDateTime.now());
+                postRepository.save(savedPost);
+                postRepository.flush();
+            }
         }
     }
 }

@@ -3,16 +3,25 @@ const nextConfig = {
   reactStrictMode: true,
   // /api/* 경로는 Next.js가 처리하지 않고 외부로 프록시
   async rewrites() {
+    // 환경 변수에서 업로드 서버 URL 가져오기
+    let uploadBaseUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL
+    
+    // 환경 변수가 없으면 프로덕션 서버 사용
+    if (!uploadBaseUrl) {
+      uploadBaseUrl = 'https://forum.rjsgud.com'
+    }
+    
+    // URL 끝에 /uploads가 포함되어 있지 않으면 추가
+    if (!uploadBaseUrl.endsWith('/uploads')) {
+      uploadBaseUrl = uploadBaseUrl.replace(/\/$/, '') + '/uploads'
+    }
+
     return [
-      // 로컬 개발 환경: /uploads/ 경로를 백엔드로 프록시
-      // 프로덕션에서는 Nginx가 직접 처리하므로 이 rewrite는 무시됨
       {
-        source: '/uploads/:path*',
-        destination: process.env.NEXT_PUBLIC_API_URL 
-          ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}/uploads/:path*`
-          : 'http://localhost:8081/uploads/:path*',
+        source: "/uploads/:path*",
+        destination: `${uploadBaseUrl}/:path*`,
       },
-    ]
+    ];
   },
   // /api/* 경로를 정적 파일로 처리하지 않도록 설정
   async headers() {

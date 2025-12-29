@@ -86,6 +86,35 @@ export default function PostDetailPage() {
         if (!url.startsWith('/')) {
           url = '/' + url
         }
+        
+        // 로컬 개발 환경에서는 프로덕션 서버의 이미지를 직접 사용
+        // 프로덕션 환경에서는 상대 경로 그대로 사용 (Nginx가 처리)
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          // 클라이언트 측에서 개발 환경일 때 프로덕션 서버 직접 사용
+          // 환경 변수가 없으면 기본값으로 프로덕션 서버 사용
+          let productionUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || 'https://forum.rjsgud.com/uploads'
+          
+          // URL 끝의 슬래시 제거
+          productionUrl = productionUrl.replace(/\/$/, '')
+          
+          // URL 끝에 /uploads가 포함되어 있지 않으면 추가
+          if (!productionUrl.endsWith('/uploads')) {
+            productionUrl = productionUrl + '/uploads'
+          }
+          
+          // 원본 URL이 이미 /uploads/로 시작하면 제거
+          let cleanUrl = url
+          if (cleanUrl.startsWith('/uploads/')) {
+            cleanUrl = cleanUrl.substring('/uploads/'.length)
+          } else if (cleanUrl.startsWith('/uploads')) {
+            cleanUrl = cleanUrl.substring('/uploads'.length)
+          }
+          
+          // 최종 URL 구성
+          url = `${productionUrl}/${cleanUrl}`
+          
+          console.log('[이미지 URL 변환]', { originalUrl, convertedUrl: url, productionUrl, cleanUrl })
+        }
       }
       
       console.log('이미지 렌더링:', { alt, url, originalUrl })
@@ -126,159 +155,158 @@ export default function PostDetailPage() {
     // 남은 텍스트
     if (lastIndex < text.length) {
       const remainingText = text.substring(lastIndex)
-      if (remainingText) {
+      if (remainingText.trim()) {
         parts.push(
-          <span key={`text-${keyCounter++}`} className="whitespace-pre-wrap">
+          <span key={`text-${keyCounter++}`} className="whitespace-pre-wrap block">
             {remainingText}
           </span>
         )
       }
     }
     
-    return parts.length > 0 ? <>{parts}</> : text
+    return parts.length > 0 ? <div>{parts}</div> : <div className="whitespace-pre-wrap">{text}</div>
   }
 
-  const formatDate = (dateString: string) => {
-    try {
-      if (!dateString) return ''
-      const date = new Date(dateString)
-      // 유효하지 않은 날짜 체크 (1970년 1월 1일 이전이거나 미래 날짜는 무시)
-      const minValidDate = new Date('1970-01-02T00:00:00Z').getTime()
-      if (isNaN(date.getTime()) || date.getTime() < minValidDate || date.getTime() > Date.now() + 86400000) {
+    const formatDate = (dateString: string) => {
+      try {
+        if (!dateString) return ''
+        const date = new Date(dateString)
+        // 유효하지 않은 날짜 체크 (1970년 1월 1일 이전이거나 미래 날짜는 무시)
+        const minValidDate = new Date('1970-01-02T00:00:00Z').getTime()
+        if (isNaN(date.getTime()) || date.getTime() < minValidDate || date.getTime() > Date.now() + 86400000) {
+          return ''
+        }
+        return format(date, 'yyyy년 MM월 dd일 HH:mm', { locale: ko })
+      } catch {
         return ''
       }
-      return format(date, 'yyyy년 MM월 dd일 HH:mm', { locale: ko })
-    } catch {
-      return ''
     }
-  }
 
-  // 수정일이 유효하고 작성일과 다른지 확인
-  const hasValidUpdateDate = () => {
-    if (!post) {
-      console.log('[hasValidUpdateDate] post가 없음')
-      return false
-    }
-    if (!post.updateDateTime) {
-      console.log('[hasValidUpdateDate] updateDateTime이 없음')
-      return false
-    }
+    // 수정일이 유효하고 작성일과 다른지 확인
+    const hasValidUpdateDate = () => {
+      if (!post) {
+        console.log('[hasValidUpdateDate] post가 없음')
+        return false
+      }
+      if (!post.updateDateTime) {
+        console.log('[hasValidUpdateDate] updateDateTime이 없음')
+        return false
+      }
     
-    try {
-      const updateDate = new Date(post.updateDateTime)
-      const createDate = new Date(post.createDateTime)
+      try {
+        const updateDate = new Date(post.updateDateTime)
+        const createDate = new Date(post.createDateTime)
       
-      console.log('[hasValidUpdateDate] updateDate:', updateDate)
-      console.log('[hasValidUpdateDate] createDate:', createDate)
-      console.log('[hasValidUpdateDate] updateDate.getTime():', updateDate.getTime())
-      console.log('[hasValidUpdateDate] createDate.getTime():', createDate.getTime())
+        console.log('[hasValidUpdateDate] updateDate:', updateDate)
+        console.log('[hasValidUpdateDate] createDate:', createDate)
+        console.log('[hasValidUpdateDate] updateDate.getTime():', updateDate.getTime())
+        console.log('[hasValidUpdateDate] createDate.getTime():', createDate.getTime())
       
-      // 유효하지 않은 날짜 체크 (1970년 1월 1일 이전)
-      const minValidDate = new Date('1970-01-02T00:00:00Z').getTime()
-      if (isNaN(updateDate.getTime()) || updateDate.getTime() < minValidDate) {
-        console.log('[hasValidUpdateDate] 유효하지 않은 날짜')
+        // 유효하지 않은 날짜 체크 (1970년 1월 1일 이전)
+        const minValidDate = new Date('1970-01-02T00:00:00Z').getTime()
+        if (isNaN(updateDate.getTime()) || updateDate.getTime() < minValidDate) {
+          console.log('[hasValidUpdateDate] 유효하지 않은 날짜')
+          return false
+        }
+      
+        // 작성일과 같은 경우 false
+        if (updateDate.getTime() === createDate.getTime()) {
+          console.log('[hasValidUpdateDate] 작성일과 수정일이 같음')
+          return false
+        }
+      
+        // 작성일보다 이후인 경우만 true (수정일이 작성일보다 이전이면 잘못된 데이터)
+        const isValid = updateDate.getTime() > createDate.getTime()
+        console.log('[hasValidUpdateDate] 최종 결과:', isValid)
+        return isValid
+      } catch (error) {
+        console.error('[hasValidUpdateDate] 에러:', error)
         return false
       }
-      
-      // 작성일과 같은 경우 false
-      if (updateDate.getTime() === createDate.getTime()) {
-        console.log('[hasValidUpdateDate] 작성일과 수정일이 같음')
-        return false
+    }
+
+    const currentUsername = getUsernameFromToken()
+    const isOwner = isAuthenticated && post && currentUsername === post.username
+
+    const handleDelete = async () => {
+      if (!confirm('정말 이 게시글을 삭제하시겠습니까?')) {
+        return
       }
-      
-      // 작성일보다 이후인 경우만 true (수정일이 작성일보다 이전이면 잘못된 데이터)
-      const isValid = updateDate.getTime() > createDate.getTime()
-      console.log('[hasValidUpdateDate] 최종 결과:', isValid)
-      return isValid
-    } catch (error) {
-      console.error('[hasValidUpdateDate] 에러:', error)
-      return false
-    }
-  }
 
-  const currentUsername = getUsernameFromToken()
-  const isOwner = isAuthenticated && post && currentUsername === post.username
-
-  const handleDelete = async () => {
-    if (!confirm('정말 이 게시글을 삭제하시겠습니까?')) {
-      return
-    }
-
-    try {
-      setDeleting(true)
-      const response = await postApi.deletePost(Number(params.id))
-      if (response.success) {
-        router.push('/')
+      try {
+        setDeleting(true)
+        const response = await postApi.deletePost(Number(params.id))
+        if (response.success) {
+          router.push('/')
+        }
+      } catch (error: any) {
+        alert(error.response?.data?.message || '게시글 삭제에 실패했습니다.')
+      } finally {
+        setDeleting(false)
       }
-    } catch (error: any) {
-      alert(error.response?.data?.message || '게시글 삭제에 실패했습니다.')
-    } finally {
-      setDeleting(false)
     }
-  }
 
-  return (
-    <div className="min-h-screen bg-white">
-      <Header onLoginClick={() => router.push('/')} />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {loading ? (
-          <div className="text-center text-gray-500">로딩 중...</div>
-        ) : post ? (
-          <>
-            <article className="bg-white">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
-              <div className="flex items-center justify-between text-sm text-gray-500 mb-8 pb-4 border-b">
-                <div className="flex items-center space-x-4">
-                  <span>{post.username}</span>
-                  <span>조회수: {post.views || post.Views || '0'}</span>
+    return (
+      <div className="min-h-screen bg-white">
+        <Header onLoginClick={() => router.push('/')} />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {loading ? (
+            <div className="text-center text-gray-500">로딩 중...</div>
+          ) : post ? (
+            <>
+              <article className="bg-white">
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
+                <div className="flex items-center justify-between text-sm text-gray-500 mb-8 pb-4 border-b">
+                  <div className="flex items-center space-x-4">
+                    <span>{post.username}</span>
+                    <span>조회수: {post.views || post.Views || '0'}</span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span>작성일: {formatDate(post.createDateTime)}</span>
+                    {hasValidUpdateDate() && (
+                      <span className="text-xs">수정일: {formatDate(post.updateDateTime)}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col items-end">
-                  <span>작성일: {formatDate(post.createDateTime)}</span>
-                  {hasValidUpdateDate() && (
-                    <span className="text-xs">수정일: {formatDate(post.updateDateTime)}</span>
+                <div className="prose max-w-none">
+                  <div className="text-gray-800 leading-relaxed">
+                    {renderMarkdown(post.body)}
+                  </div>
+                </div>
+                <div className="mt-8 pt-8 border-t flex justify-between items-center">
+                  <button
+                    onClick={() => router.back()}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    목록으로
+                  </button>
+                  {isOwner && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => router.push(`/posts/${params.id}/edit`)}
+                        className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deleting ? '삭제 중...' : '삭제'}
+                      </button>
+                    </div>
                   )}
                 </div>
-              </div>
-            <div className="prose max-w-none">
-              <div className="text-gray-800 leading-relaxed">
-                {renderMarkdown(post.body)}
-              </div>
-            </div>
-              <div className="mt-8 pt-8 border-t flex justify-between items-center">
-                <button
-                  onClick={() => router.back()}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  목록으로
-                </button>
-                {isOwner && (
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => router.push(`/posts/${params.id}/edit`)}
-                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
-                    >
-                      수정
-                    </button>
-                    <button
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {deleting ? '삭제 중...' : '삭제'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </article>
+              </article>
 
-            {/* 댓글 섹션 */}
-            <CommentList postId={Number(params.id)} postAuthorUsername={post.username} />
-          </>
-        ) : (
-          <div className="text-center text-gray-500">게시글을 찾을 수 없습니다.</div>
-        )}
+              {/* 댓글 섹션 */}
+              <CommentList postId={Number(params.id)} postAuthorUsername={post.username} />
+            </>
+          ) : (
+            <div className="text-center text-gray-500">게시글을 찾을 수 없습니다.</div>
+          )}
+        </div>
       </div>
-    </div>
-  )
+    )
 }
-

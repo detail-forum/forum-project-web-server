@@ -47,28 +47,107 @@ export default function PostDetailPage() {
     }
   }
 
-  // 마크다운 이미지 렌더링 (간단한 버전)
+  // 마크다운 렌더링 (제목, 굵게, 기울임, 링크, 코드, 이미지 등 지원)
   const renderMarkdown = (text: string): React.ReactNode => {
     if (!text) return ''
     
-    // 이미지 마크다운 패턴: ![alt](url) 또는 ![alt](url width="..." height="...")
-    // width/height 속성은 선택적이며, URL과 함께 파싱됨
-    const imagePattern = /!\[([^\]]*)\]\(([^)]+?)(?:\s+width=["']?\d+["']?\s*height=["']?\d+["']?)?\)/g
+    // 줄 단위로 분리하여 처리
+    const lines = text.split('\n')
+    const parts: React.ReactNode[] = []
+    let keyCounter = 0
+    let inCodeBlock = false
+    let codeBlockContent: string[] = []
+    let codeBlockLanguage = ''
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      
+      // 코드 블록 처리
+      if (line.trim().startsWith('```')) {
+        if (inCodeBlock) {
+          // 코드 블록 종료
+          parts.push(
+            <pre key={`code-${keyCounter++}`} className="bg-gray-100 p-4 rounded-lg overflow-x-auto my-4">
+              <code className="text-sm font-mono">{codeBlockContent.join('\n')}</code>
+            </pre>
+          )
+          codeBlockContent = []
+          inCodeBlock = false
+          codeBlockLanguage = ''
+        } else {
+          // 코드 블록 시작
+          codeBlockLanguage = line.trim().substring(3).trim()
+          inCodeBlock = true
+        }
+        continue
+      }
+      
+      if (inCodeBlock) {
+        codeBlockContent.push(line)
+        continue
+      }
+      
+      // 제목 처리 (# ## ###)
+      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
+      if (headingMatch) {
+        const level = headingMatch[1].length
+        const content = headingMatch[2]
+        const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements
+        parts.push(
+          <HeadingTag key={`heading-${keyCounter++}`} className={`font-bold my-4 ${level === 1 ? 'text-3xl' : level === 2 ? 'text-2xl' : level === 3 ? 'text-xl' : 'text-lg'}`}>
+            {renderInlineMarkdown(content)}
+          </HeadingTag>
+        )
+        continue
+      }
+      
+      // 리스트 처리 (- item)
+      if (line.trim().startsWith('- ')) {
+        const listItem = line.trim().substring(2)
+        parts.push(
+          <li key={`list-${keyCounter++}`} className="ml-4 list-disc">
+            {renderInlineMarkdown(listItem)}
+          </li>
+        )
+        continue
+      }
+      
+      // 빈 줄 처리
+      if (line.trim() === '') {
+        parts.push(<br key={`br-${keyCounter++}`} />)
+        continue
+      }
+      
+      // 일반 텍스트 처리 (인라인 마크다운 포함)
+      parts.push(
+        <p key={`para-${keyCounter++}`} className="my-2">
+          {renderInlineMarkdown(line)}
+        </p>
+      )
+    }
+    
+    return <div className="prose max-w-none">{parts}</div>
+  }
+  
+  // 인라인 마크다운 렌더링 (굵게, 기울임, 링크, 코드, 이미지)
+  const renderInlineMarkdown = (text: string): React.ReactNode => {
+    if (!text) return ''
+    
     const parts: React.ReactNode[] = []
     let lastIndex = 0
-    let match
     let keyCounter = 0
+    
+    // 이미지 마크다운 패턴: ![alt](url) 또는 ![alt](url width="..." height="...")
+    const imagePattern = /!\[([^\]]*)\]\(([^)]+?)(?:\s+width=["']?\d+["']?\s*height=["']?\d+["']?)?\)/g
+    let match
     
     while ((match = imagePattern.exec(text)) !== null) {
       // 이미지 앞의 텍스트
       if (match.index > lastIndex) {
         const textPart = text.substring(lastIndex, match.index)
         if (textPart) {
-          parts.push(
-            <span key={`text-${keyCounter++}`} className="whitespace-pre-wrap">
-              {textPart}
-            </span>
-          )
+          parts.push(...renderTextMarkdown(textPart, keyCounter))
+          keyCounter += 100 // 충분한 키 공간 확보
         }
       }
       
@@ -76,7 +155,6 @@ export default function PostDetailPage() {
       const alt = match[1] || '이미지'
       let originalUrl = match[2]
       if (!originalUrl || !originalUrl.trim()) {
-        // URL이 없으면 건너뛰기
         lastIndex = match.index + match[0].length
         continue
       }
@@ -87,7 +165,7 @@ export default function PostDetailPage() {
       let imageWidth: number | null = widthMatch ? parseInt(widthMatch[1]) : null
       let imageHeight: number | null = heightMatch ? parseInt(heightMatch[1]) : null
       
-      // URL에서 width/height 속성 제거 (마크다운 확장 형식 지원)
+      // URL에서 width/height 속성 제거
       originalUrl = originalUrl.trim()
       originalUrl = originalUrl.replace(/\s+width=["']?\d+["']?\s*height=["']?\d+["']?/gi, '')
       originalUrl = originalUrl.replace(/\s+height=["']?\d+["']?\s*width=["']?\d+["']?/gi, '')
@@ -99,47 +177,28 @@ export default function PostDetailPage() {
       
       // URL 정규화
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        // 상대 경로인 경우 /로 시작하도록 보장
         if (!url.startsWith('/')) {
           url = '/' + url
         }
         
-        // 로컬 개발 환경에서는 프로덕션 서버의 이미지를 직접 사용
-        // 프로덕션 환경에서는 상대 경로 그대로 사용 (Nginx가 처리)
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-          // 클라이언트 측에서 개발 환경일 때 프로덕션 서버 직접 사용
-          // 환경 변수가 없으면 기본값으로 프로덕션 서버 사용
           let productionUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || 'https://forum.rjsgud.com/uploads'
-          
-          // URL 끝의 슬래시 제거
           productionUrl = productionUrl.replace(/\/$/, '')
-          
-          // URL 끝에 /uploads가 포함되어 있지 않으면 추가
           if (!productionUrl.endsWith('/uploads')) {
             productionUrl = productionUrl + '/uploads'
           }
-          
-          // 원본 URL이 이미 /uploads/로 시작하면 제거
           let cleanUrl = url
           if (cleanUrl.startsWith('/uploads/')) {
             cleanUrl = cleanUrl.substring('/uploads/'.length)
           } else if (cleanUrl.startsWith('/uploads')) {
             cleanUrl = cleanUrl.substring('/uploads'.length)
           }
-          
-          // 최종 URL 구성
           url = `${productionUrl}/${cleanUrl}`
-          
-          console.log('[이미지 URL 변환]', { originalUrl, convertedUrl: url, productionUrl, cleanUrl })
         }
-      } 
+      }
       
-      console.log('이미지 렌더링:', { alt, url, originalUrl, imageWidth, imageHeight })
-      
-      // 기본 높이 300px 설정 (크기 정보가 없을 때)
       const defaultHeight = 300
       const finalHeight = imageHeight || defaultHeight
-      // width가 없으면 이미지 로드 후 종횡비에 맞춰 자동 계산
       const finalWidth = imageWidth || undefined
       
       parts.push(
@@ -156,20 +215,12 @@ export default function PostDetailPage() {
             className="rounded-lg border border-gray-200 shadow-sm"
             onLoad={(e) => {
               const img = e.currentTarget
-              console.log('이미지 로드 성공:', url)
-              // width가 없으면 종횡비에 맞춰 자동 계산
               if (!finalWidth) {
                 const aspectRatio = img.naturalWidth / img.naturalHeight
                 img.style.width = `${finalHeight * aspectRatio}px`
               }
             }}
             onError={(e) => {
-              console.error('이미지 로드 실패:', {
-                url,
-                originalUrl,
-                src: e.currentTarget.src,
-                currentSrc: e.currentTarget.currentSrc,
-              })
               const img = e.currentTarget
               const container = img.parentElement
               if (container && !container.querySelector('.error-message')) {
@@ -187,19 +238,124 @@ export default function PostDetailPage() {
       lastIndex = match.index + match[0].length
     }
     
-    // 남은 텍스트
+    // 남은 텍스트 처리
     if (lastIndex < text.length) {
       const remainingText = text.substring(lastIndex)
-      if (remainingText.trim()) {
-        parts.push(
-          <span key={`text-${keyCounter++}`} className="whitespace-pre-wrap block">
-            {remainingText}
-          </span>
-        )
+      if (remainingText) {
+        parts.push(...renderTextMarkdown(remainingText, keyCounter))
       }
     }
     
-    return parts.length > 0 ? <div>{parts}</div> : <div className="whitespace-pre-wrap">{text}</div>
+    return parts.length > 0 ? parts : [text]
+  }
+  
+  // 텍스트 마크다운 렌더링 (굵게, 기울임, 링크, 인라인 코드)
+  const renderTextMarkdown = (text: string, startKey: number = 0): React.ReactNode[] => {
+    if (!text) return []
+    
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+    let keyCounter = startKey
+    
+    // 패턴 우선순위: 코드 > 링크 > 굵게 > 기울임
+    const patterns = [
+      { regex: /`([^`]+)`/g, type: 'code' },
+      { regex: /\[([^\]]+)\]\(([^)]+)\)/g, type: 'link' },
+      { regex: /\*\*([^*]+)\*\*/g, type: 'bold' },
+      { regex: /\*([^*]+)\*/g, type: 'italic' },
+    ]
+    
+    // 모든 매치 찾기
+    const matches: Array<{ index: number; length: number; type: string; content: string; url?: string }> = []
+    
+    patterns.forEach(({ regex, type }) => {
+      let match
+      regex.lastIndex = 0
+      while ((match = regex.exec(text)) !== null) {
+        matches.push({
+          index: match.index,
+          length: match[0].length,
+          type,
+          content: match[1],
+          url: match[2],
+        })
+      }
+    })
+    
+    // 인덱스 순으로 정렬
+    matches.sort((a, b) => a.index - b.index)
+    
+    // 겹치는 매치 제거 (먼저 나온 것 우선)
+    const filteredMatches: typeof matches = []
+    for (const match of matches) {
+      const overlaps = filteredMatches.some(
+        (m) => match.index < m.index + m.length && match.index + match.length > m.index
+      )
+      if (!overlaps) {
+        filteredMatches.push(match)
+      }
+    }
+    
+    // 매치를 기반으로 렌더링
+    filteredMatches.forEach((match) => {
+      // 매치 앞의 텍스트
+      if (match.index > lastIndex) {
+        const textPart = text.substring(lastIndex, match.index)
+        if (textPart) {
+          parts.push(<span key={`text-${keyCounter++}`}>{textPart}</span>)
+        }
+      }
+      
+      // 매치 렌더링
+      switch (match.type) {
+        case 'code':
+          parts.push(
+            <code key={`code-${keyCounter++}`} className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">
+              {match.content}
+            </code>
+          )
+          break
+        case 'link':
+          parts.push(
+            <a
+              key={`link-${keyCounter++}`}
+              href={match.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              {match.content}
+            </a>
+          )
+          break
+        case 'bold':
+          parts.push(
+            <strong key={`bold-${keyCounter++}`} className="font-bold">
+              {match.content}
+            </strong>
+          )
+          break
+        case 'italic':
+          parts.push(
+            <em key={`italic-${keyCounter++}`} className="italic">
+              {match.content}
+            </em>
+          )
+          break
+      }
+      
+      lastIndex = match.index + match.length
+    })
+    
+    // 남은 텍스트
+    if (lastIndex < text.length) {
+      const remainingText = text.substring(lastIndex)
+      if (remainingText) {
+        parts.push(<span key={`text-${keyCounter++}`}>{remainingText}</span>)
+      }
+    }
+    
+    return parts.length > 0 ? parts : [<span key={`text-${keyCounter}`}>{text}</span>]
   }
 
     const formatDate = (dateString: string) => {

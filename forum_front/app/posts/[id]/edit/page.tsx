@@ -97,9 +97,11 @@ export default function EditPostPage() {
         updateData.profileImageUrl = formData.profileImageUrl
       }
 
+      // 변경사항이 없어도 저장 성공으로 처리
       if (Object.keys(updateData).length === 0) {
-        setError('변경된 내용이 없습니다.')
-        setSaving(false)
+        // 수정 후 페이지 이동 시 캐시 무효화를 위해 router.refresh() 호출
+        router.push(`/posts/${params.id}`)
+        router.refresh()
         return
       }
 

@@ -29,7 +29,26 @@ export default function CreatePostPage() {
     if (!isAuthenticated) {
       setShowLoginModal(true)
     }
-  }, [isAuthenticated])
+
+    // 뒤로가기 방지: 히스토리 교체
+    if (typeof window !== 'undefined') {
+      // 현재 히스토리를 교체하여 뒤로가기 히스토리 제거
+      window.history.replaceState(null, '', window.location.href)
+      
+      // popstate 이벤트 감지 (뒤로가기/앞으로가기)
+      const handlePopState = (e: PopStateEvent) => {
+        // 뒤로가기 시 메인 페이지로 리다이렉트
+        e.preventDefault()
+        router.push('/')
+      }
+      
+      window.addEventListener('popstate', handlePopState)
+      
+      return () => {
+        window.removeEventListener('popstate', handlePopState)
+      }
+    }
+  }, [isAuthenticated, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
@@ -38,6 +38,29 @@ export default function EditPostPage() {
       fetchPost()
     }
   }, [params.id, isAuthenticated])
+
+  // 뒤로가기 방지: 별도의 useEffect로 분리
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    // 현재 히스토리를 교체하여 뒤로가기 히스토리 제거
+    window.history.replaceState(null, '', window.location.href)
+    
+    // popstate 이벤트 감지 (뒤로가기/앞으로가기)
+    const handlePopState = () => {
+      // 뒤로가기 시 게시글 상세 페이지로 리다이렉트
+      const postId = params.id
+      if (postId) {
+        router.push(`/posts/${postId}`)
+      }
+    }
+    
+    window.addEventListener('popstate', handlePopState)
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [params.id, router])
 
   const fetchPost = async () => {
     try {
@@ -205,7 +228,7 @@ export default function EditPostPage() {
   }
 
   // 이미지 크기 변경 핸들러
-  const handleImageSizeChange = (newMarkdown: string) => {
+  const handleImageSizeChange = useCallback((newMarkdown: string) => {
     // 마크다운에서 URL 추출하여 기존 마크다운 찾기
     const urlMatch = newMarkdown.match(/!\[([^\]]*)\]\(([^)]+?)(?:\s+width="\d+"\s+height="\d+")?\)/)
     if (!urlMatch) return
@@ -213,171 +236,18 @@ export default function EditPostPage() {
     const url = urlMatch[2].trim()
     // 기존 본문에서 해당 URL을 가진 이미지 마크다운 찾기 (크기 정보 포함/미포함 모두)
     const oldPattern = new RegExp(`!\\[([^\\]]*)\\]\\(${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s+width="\\d+"\\s+height="\\d+")?\\)`, 'g')
-    const updatedBody = formData.body.replace(oldPattern, newMarkdown)
     
-    setFormData({
-      ...formData,
-      body: updatedBody,
+    setFormData((prev) => {
+      const updatedBody = prev.body.replace(oldPattern, newMarkdown)
+      return {
+        ...prev,
+        body: updatedBody,
+      }
     })
-  }
-
-  // 마크다운 렌더링 (이미지는 ResizableImage로 처리)
-  const renderPreview = useMemo(() => {
-    if (!formData.body) return null
-
-    // 이미지 마크다운 패턴: ![alt](url) 또는 ![alt](url width="..." height="...")
-    const imagePattern = /!\[([^\]]*)\]\(([^)]+?)(?:\s+width=["']?(\d+)["']?\s*height=["']?(\d+)["']?)?\)/g
-    const parts: React.ReactNode[] = []
-    let lastIndex = 0
-    let match
-    let keyCounter = 0
-    const imageMatches: Array<{ index: number; length: number; alt: string; url: string; fullMarkdown: string }> = []
-
-    // 모든 이미지 매치 찾기
-    while ((match = imagePattern.exec(formData.body)) !== null) {
-      let url = match[2].trim()
-      url = url.replace(/\s+width=["']?\d+["']?\s*height=["']?\d+["']?/gi, '')
-      url = url.replace(/\s+height=["']?\d+["']?\s*width=["']?\d+["']?/gi, '')
-      url = url.replace(/\s+width=["']?\d+["']?/gi, '')
-      url = url.replace(/\s+height=["']?\d+["']?/gi, '')
-      url = url.trim()
-
-      if (url) {
-        imageMatches.push({
-          index: match.index,
-          length: match[0].length,
-          alt: match[1] || '이미지',
-          url,
-          fullMarkdown: match[0],
-        })
-      }
-    }
-
-    // 이미지를 기준으로 텍스트 분할 및 마크다운 렌더링
-    let processedText = ''
-    let imageIndex = 0
-
-    for (let i = 0; i <= formData.body.length; i++) {
-      if (imageIndex < imageMatches.length && i === imageMatches[imageIndex].index) {
-        // 이미지 앞의 텍스트를 마크다운으로 렌더링
-        if (processedText) {
-          parts.push(
-            <div key={`text-${keyCounter++}`}>
-              {renderMarkdownText(processedText)}
-            </div>
-          )
-          processedText = ''
-        }
-
-        // 이미지 렌더링 (ResizableImage 사용)
-        const imgMatch = imageMatches[imageIndex]
-        parts.push(
-          <ResizableImage
-            key={`img-${keyCounter++}`}
-            src={imgMatch.url}
-            alt={imgMatch.alt}
-            markdown={imgMatch.fullMarkdown}
-            onSizeChange={handleImageSizeChange}
-          />
-        )
-
-        i += imageMatches[imageIndex].length - 1
-        imageIndex++
-      } else if (i < formData.body.length) {
-        processedText += formData.body[i]
-      }
-    }
-
-    // 남은 텍스트 마크다운 렌더링
-    if (processedText) {
-      parts.push(
-        <div key={`text-${keyCounter++}`}>
-          {renderMarkdownText(processedText)}
-        </div>
-      )
-    }
-
-    return parts.length > 0 ? <div className="space-y-2">{parts}</div> : null
-  }, [formData.body])
-
-  // 마크다운 텍스트 렌더링 (제목, 굵게, 기울임, 링크, 코드 등)
-  const renderMarkdownText = (text: string): React.ReactNode => {
-    if (!text) return null
-
-    const lines = text.split('\n')
-    const parts: React.ReactNode[] = []
-    let keyCounter = 0
-    let inCodeBlock = false
-    let codeBlockContent: string[] = []
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-
-      // 코드 블록 처리
-      if (line.trim().startsWith('```')) {
-        if (inCodeBlock) {
-          parts.push(
-            <pre key={`code-${keyCounter++}`} className="bg-gray-100 p-4 rounded-lg overflow-x-auto my-4">
-              <code className="text-sm font-mono">{codeBlockContent.join('\n')}</code>
-            </pre>
-          )
-          codeBlockContent = []
-          inCodeBlock = false
-        } else {
-          inCodeBlock = true
-        }
-        continue
-      }
-
-      if (inCodeBlock) {
-        codeBlockContent.push(line)
-        continue
-      }
-
-      // 제목 처리
-      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
-      if (headingMatch) {
-        const level = headingMatch[1].length
-        const content = headingMatch[2]
-        const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements
-        parts.push(
-          <HeadingTag key={`heading-${keyCounter++}`} className={`font-bold my-4 ${level === 1 ? 'text-3xl' : level === 2 ? 'text-2xl' : level === 3 ? 'text-xl' : 'text-lg'}`}>
-            {renderInlineMarkdown(content)}
-          </HeadingTag>
-        )
-        continue
-      }
-
-      // 리스트 처리
-      if (line.trim().startsWith('- ')) {
-        const listItem = line.trim().substring(2)
-        parts.push(
-          <li key={`list-${keyCounter++}`} className="ml-4 list-disc">
-            {renderInlineMarkdown(listItem)}
-          </li>
-        )
-        continue
-      }
-
-      // 빈 줄 처리
-      if (line.trim() === '') {
-        parts.push(<br key={`br-${keyCounter++}`} />)
-        continue
-      }
-
-      // 일반 텍스트 처리
-      parts.push(
-        <p key={`para-${keyCounter++}`} className="my-2">
-          {renderInlineMarkdown(line)}
-        </p>
-      )
-    }
-
-    return <div className="prose max-w-none">{parts}</div>
-  }
+  }, [])
 
   // 인라인 마크다운 렌더링 (굵게, 기울임, 링크, 코드)
-  const renderInlineMarkdown = (text: string): React.ReactNode => {
+  const renderInlineMarkdown = useCallback((text: string): React.ReactNode => {
     if (!text) return ''
 
     const parts: React.ReactNode[] = []
@@ -476,7 +346,162 @@ export default function EditPostPage() {
     }
 
     return parts.length > 0 ? parts : [<span key={`text-${keyCounter}`}>{text}</span>]
-  }
+  }, [])
+
+  // 마크다운 텍스트 렌더링 (제목, 굵게, 기울임, 링크, 코드 등)
+  const renderMarkdownText = useCallback((text: string): React.ReactNode => {
+    if (!text) return null
+
+    const lines = text.split('\n')
+    const parts: React.ReactNode[] = []
+    let keyCounter = 0
+    let inCodeBlock = false
+    let codeBlockContent: string[] = []
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+
+      // 코드 블록 처리
+      if (line.trim().startsWith('```')) {
+        if (inCodeBlock) {
+          parts.push(
+            <pre key={`code-${keyCounter++}`} className="bg-gray-100 p-4 rounded-lg overflow-x-auto my-4">
+              <code className="text-sm font-mono">{codeBlockContent.join('\n')}</code>
+            </pre>
+          )
+          codeBlockContent = []
+          inCodeBlock = false
+        } else {
+          inCodeBlock = true
+        }
+        continue
+      }
+
+      if (inCodeBlock) {
+        codeBlockContent.push(line)
+        continue
+      }
+
+      // 제목 처리
+      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/)
+      if (headingMatch) {
+        const level = headingMatch[1].length
+        const content = headingMatch[2]
+        const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements
+        parts.push(
+          <HeadingTag key={`heading-${keyCounter++}`} className={`font-bold my-4 ${level === 1 ? 'text-3xl' : level === 2 ? 'text-2xl' : level === 3 ? 'text-xl' : 'text-lg'}`}>
+            {renderInlineMarkdown(content)}
+          </HeadingTag>
+        )
+        continue
+      }
+
+      // 리스트 처리
+      if (line.trim().startsWith('- ')) {
+        const listItem = line.trim().substring(2)
+        parts.push(
+          <li key={`list-${keyCounter++}`} className="ml-4 list-disc">
+            {renderInlineMarkdown(listItem)}
+          </li>
+        )
+        continue
+      }
+
+      // 빈 줄 처리
+      if (line.trim() === '') {
+        parts.push(<br key={`br-${keyCounter++}`} />)
+        continue
+      }
+
+      // 일반 텍스트 처리
+      parts.push(
+        <p key={`para-${keyCounter++}`} className="my-2">
+          {renderInlineMarkdown(line)}
+        </p>
+      )
+    }
+
+    return <div className="prose max-w-none">{parts}</div>
+  }, [renderInlineMarkdown])
+
+  // 마크다운 렌더링 (이미지는 ResizableImage로 처리)
+  const renderPreview = useMemo(() => {
+    if (!formData.body) return null
+
+    // 이미지 마크다운 패턴: ![alt](url) 또는 ![alt](url width="..." height="...")
+    const imagePattern = /!\[([^\]]*)\]\(([^)]+?)(?:\s+width=["']?(\d+)["']?\s*height=["']?(\d+)["']?)?\)/g
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+    let match
+    let keyCounter = 0
+    const imageMatches: Array<{ index: number; length: number; alt: string; url: string; fullMarkdown: string }> = []
+
+    // 모든 이미지 매치 찾기
+    while ((match = imagePattern.exec(formData.body)) !== null) {
+      let url = match[2].trim()
+      url = url.replace(/\s+width=["']?\d+["']?\s*height=["']?\d+["']?/gi, '')
+      url = url.replace(/\s+height=["']?\d+["']?\s*width=["']?\d+["']?/gi, '')
+      url = url.replace(/\s+width=["']?\d+["']?/gi, '')
+      url = url.replace(/\s+height=["']?\d+["']?/gi, '')
+      url = url.trim()
+
+      if (url) {
+        imageMatches.push({
+          index: match.index,
+          length: match[0].length,
+          alt: match[1] || '이미지',
+          url,
+          fullMarkdown: match[0],
+        })
+      }
+    }
+
+    // 이미지를 기준으로 텍스트 분할 및 마크다운 렌더링
+    let processedText = ''
+    let imageIndex = 0
+
+    for (let i = 0; i <= formData.body.length; i++) {
+      if (imageIndex < imageMatches.length && i === imageMatches[imageIndex].index) {
+        // 이미지 앞의 텍스트를 마크다운으로 렌더링
+        if (processedText) {
+          parts.push(
+            <div key={`text-${keyCounter++}`}>
+              {renderMarkdownText(processedText)}
+            </div>
+          )
+          processedText = ''
+        }
+
+        // 이미지 렌더링 (ResizableImage 사용)
+        const imgMatch = imageMatches[imageIndex]
+        parts.push(
+          <ResizableImage
+            key={`img-${keyCounter++}`}
+            src={imgMatch.url}
+            alt={imgMatch.alt}
+            markdown={imgMatch.fullMarkdown}
+            onSizeChange={handleImageSizeChange}
+          />
+        )
+
+        i += imageMatches[imageIndex].length - 1
+        imageIndex++
+      } else if (i < formData.body.length) {
+        processedText += formData.body[i]
+      }
+    }
+
+    // 남은 텍스트 마크다운 렌더링
+    if (processedText) {
+      parts.push(
+        <div key={`text-${keyCounter++}`}>
+          {renderMarkdownText(processedText)}
+        </div>
+      )
+    }
+
+    return parts.length > 0 ? <div className="space-y-2">{parts}</div> : null
+  }, [formData.body, handleImageSizeChange, renderMarkdownText])
 
   if (loading && isAuthenticated) {
     return (

@@ -91,3 +91,12 @@ export interface UpdateCommentDTO {
   body: string
 }
 
+export interface UserInfoDTO {
+  id: number
+  username: string
+  nickname: string
+  email: string
+  followerCount: number
+  followingCount: number
+  isFollowing: boolean
+}

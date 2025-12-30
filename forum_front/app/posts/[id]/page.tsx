@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
-import { postApi } from '@/services/api'
-import type { PostDetailDTO } from '@/types/api'
+import { postApi, followApi } from '@/services/api'
+import type { PostDetailDTO, UserInfoDTO } from '@/types/api'
 import Header from '@/components/Header'
 import CommentList from '@/components/CommentList'
 import LoginModal from '@/components/LoginModal'
@@ -22,6 +22,9 @@ export default function PostDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [liking, setLiking] = useState(false)
+  const [authorInfo, setAuthorInfo] = useState<UserInfoDTO | null>(null)
+  const [following, setFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -34,17 +37,64 @@ export default function PostDetailPage() {
       setLoading(true)
       const response = await postApi.getPostDetail(Number(params.id))
       if (response.success && response.data) {
-        // 디버깅: 실제 응답 구조 확인
-        console.log('게시글 응답 데이터:', response.data)
-        console.log('작성일:', response.data.createDateTime)
-        console.log('수정일:', response.data.updateDateTime)
-        console.log('수정일 타입:', typeof response.data.updateDateTime)
         setPost(response.data)
+        // 작성자 정보 조회
+        if (response.data.username) {
+          fetchAuthorInfo(response.data.username)
+        }
       }
     } catch (error) {
       console.error('게시글 조회 실패:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAuthorInfo = async (username: string) => {
+    try {
+      const response = await followApi.getUserInfo(username)
+      if (response.success && response.data) {
+        setAuthorInfo(response.data)
+        setFollowing(response.data.isFollowing)
+      }
+    } catch (error) {
+      console.error('작성자 정보 조회 실패:', error)
+    }
+  }
+
+  const handleFollow = async () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true)
+      return
+    }
+    if (!authorInfo) return
+
+    setFollowLoading(true)
+    try {
+      if (following) {
+        const response = await followApi.unfollowUser(authorInfo.id)
+        if (response.success) {
+          setFollowing(false)
+          // 작성자 정보 다시 조회하여 팔로워 수 업데이트
+          if (post?.username) {
+            fetchAuthorInfo(post.username)
+          }
+        }
+      } else {
+        const response = await followApi.followUser(authorInfo.id)
+        if (response.success) {
+          setFollowing(true)
+          // 작성자 정보 다시 조회하여 팔로워 수 업데이트
+          if (post?.username) {
+            fetchAuthorInfo(post.username)
+          }
+        }
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.message || '팔로우 처리에 실패했습니다.')
+      console.error('팔로우 처리 실패:', error)
+    } finally {
+      setFollowLoading(false)
     }
   }
 
@@ -495,7 +545,39 @@ export default function PostDetailPage() {
                 <h1 className="text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
                 <div className="flex items-center justify-between text-sm text-gray-500 mb-8 pb-4 border-b">
                   <div className="flex items-center space-x-4">
-                    <span>{post.username}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium">{post.username}</span>
+                      {authorInfo && (
+                        <>
+                          <span className="text-gray-400">•</span>
+                          <button
+                            onClick={() => router.push(`/users/${post.username}/followers?type=followers`)}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            팔로워 {authorInfo.followerCount}
+                          </button>
+                          <button
+                            onClick={() => router.push(`/users/${post.username}/followers?type=following`)}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            팔로잉 {authorInfo.followingCount}
+                          </button>
+                          {!isOwner && isAuthenticated && (
+                            <button
+                              onClick={handleFollow}
+                              disabled={followLoading}
+                              className={`ml-2 px-3 py-1 text-xs rounded-lg transition-colors ${
+                                following
+                                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  : 'bg-primary text-white hover:bg-secondary'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                              {followLoading ? '처리 중...' : following ? '언팔로우' : '팔로우'}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                     <span>조회수: {post.views || post.Views || '0'}</span>
                     <span className="flex items-center space-x-1">
                       <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">

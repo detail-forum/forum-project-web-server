@@ -140,7 +140,7 @@ public class CommentService {
     }
 
     /**
-     * 댓글 수정
+     * 댓글 수정 (댓글 작성자 또는 게시글 작성자만 가능)
      */
     @Transactional
     public CommentDTO updateComment(Long commentId, UpdateCommentDTO dto) {
@@ -153,8 +153,12 @@ public class CommentService {
             throw new ResourceNotFoundException("삭제된 댓글입니다.");
         }
 
-        if (!comment.getUser().getId().equals(currentUser.getId())) {
-            throw new ApplicationUnauthorizedException("작성자만 댓글을 수정할 수 있습니다.");
+        // 댓글 작성자 또는 게시글 작성자만 수정 가능
+        boolean isCommentAuthor = comment.getUser().getId().equals(currentUser.getId());
+        boolean isPostAuthor = comment.getPost().getUser().getId().equals(currentUser.getId());
+
+        if (!isCommentAuthor && !isPostAuthor) {
+            throw new ApplicationUnauthorizedException("작성자 또는 게시글 작성자만 댓글을 수정할 수 있습니다.");
         }
 
         comment.setBody(dto.getBody());

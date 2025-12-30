@@ -239,8 +239,8 @@ export default function CommentItem({
                 </button>
               )}
 
-              {/* 수정 버튼 */}
-              {isOwner && (
+              {/* 수정 버튼 - 로그인된 유저 중 자신의 댓글이거나 게시물 주인만 수정 가능 */}
+              {isAuthenticated && (isOwner || isPostAuthor) && (
                 <button
                   onClick={() => setIsEditing(true)}
                   className="flex items-center space-x-1 px-2 py-1 text-gray-500 hover:text-primary transition-colors"

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useSelector, useDispatch } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { logout } from '@/store/slices/authSlice'
@@ -48,13 +47,12 @@ export default function Header({ onLoginClick }: HeaderProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center space-x-3" prefetch={true}>
-            <Image
+            <img
               src="/asset/logo.png"
               alt="로고"
               width={40}
               height={40}
               className="object-contain"
-              priority
             />
             <span className="text-lg font-semibold text-gray-800">
               rjsgud's forum

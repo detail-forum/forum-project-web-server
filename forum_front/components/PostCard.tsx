@@ -60,13 +60,11 @@ function PostCard({ post }: PostCardProps) {
       {/* 이미지 영역 - 정사각형 비율 */}
       <div className="relative w-full aspect-square bg-gray-100 overflow-hidden">
         {defaultImageUrl && (
-          <Image
+          <img
             src={getImageUrl()}
             alt={post.title}
-            fill
-            className="object-cover"
+            className="w-full h-full object-cover"
             onError={() => setImageError(true)}
-            unoptimized={getImageUrl().startsWith('blob:')}
           />
         )}
         {/* 오버레이 그라데이션 */}

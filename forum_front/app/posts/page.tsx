@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
@@ -8,11 +8,13 @@ import { postApi, imageUploadApi } from '@/services/api'
 import Header from '@/components/Header'
 import ImageInsertButton from '@/components/ImageInsertButton'
 import ImageCropModal from '@/components/ImageCropModal'
+import LoginModal from '@/components/LoginModal'
 import Image from 'next/image'
 
 export default function CreatePostPage() {
   const router = useRouter()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '' })
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
@@ -23,9 +25,27 @@ export default function CreatePostPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const profileImageInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true)
+    }
+  }, [isAuthenticated])
+
   if (!isAuthenticated) {
-    router.push('/')
-    return null
+    return (
+      <div className="min-h-screen bg-white">
+        <Header onLoginClick={() => setShowLoginModal(true)} />
+        {showLoginModal && (
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => {
+              setShowLoginModal(false)
+              router.push('/')
+            }}
+          />
+        )}
+      </div>
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,7 +156,7 @@ export default function CreatePostPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header onLoginClick={() => router.push('/')} />
+      <Header onLoginClick={() => setShowLoginModal(true)} />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">게시글 작성</h1>
         <form onSubmit={handleSubmit} className="space-y-6">

@@ -10,6 +10,7 @@ import Header from '@/components/Header'
 import ImageInsertButton from '@/components/ImageInsertButton'
 import ResizableImage from '@/components/ResizableImage'
 import ImageCropModal from '@/components/ImageCropModal'
+import LoginModal from '@/components/LoginModal'
 import { getUsernameFromToken } from '@/utils/jwt'
 import Image from 'next/image'
 
@@ -17,6 +18,7 @@ export default function EditPostPage() {
   const params = useParams()
   const router = useRouter()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [post, setPost] = useState<PostDetailDTO | null>(null)
   const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '' })
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
@@ -31,7 +33,7 @@ export default function EditPostPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/')
+      setShowLoginModal(true)
       return
     }
     fetchPost()
@@ -284,13 +286,26 @@ export default function EditPostPage() {
   }, [formData.body])
 
   if (!isAuthenticated) {
-    return null
+    return (
+      <div className="min-h-screen bg-white">
+        <Header onLoginClick={() => setShowLoginModal(true)} />
+        {showLoginModal && (
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => {
+              setShowLoginModal(false)
+              router.push(`/posts/${params.id}`)
+            }}
+          />
+        )}
+      </div>
+    )
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-white">
-        <Header onLoginClick={() => router.push('/')} />
+        <Header onLoginClick={() => setShowLoginModal(true)} />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center text-gray-500">로딩 중...</div>
         </div>
@@ -300,7 +315,7 @@ export default function EditPostPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header onLoginClick={() => router.push('/')} />
+      <Header onLoginClick={() => setShowLoginModal(true)} />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">게시글 수정</h1>
         <form onSubmit={handleSubmit} className="space-y-6">

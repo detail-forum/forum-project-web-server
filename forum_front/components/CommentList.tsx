@@ -7,6 +7,7 @@ import { commentApi } from '@/services/api'
 import type { CommentDTO } from '@/types/api'
 import CommentItem from './CommentItem'
 import CommentForm from './CommentForm'
+import LoginModal from './LoginModal'
 import { getUsernameFromToken } from '@/utils/jwt'
 
 interface CommentListProps {
@@ -18,6 +19,7 @@ export default function CommentList({ postId, postAuthorUsername }: CommentListP
   const [comments, setComments] = useState<CommentDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const currentUsername = getUsernameFromToken()
 
@@ -123,11 +125,29 @@ export default function CommentList({ postId, postAuthorUsername }: CommentListP
       </h2>
 
       {/* 댓글 작성 폼 */}
-      {isAuthenticated && (
+      {isAuthenticated ? (
         <CommentForm
           postId={postId}
           onCommentCreated={handleCommentCreated}
           placeholder="댓글을 입력하세요..."
+        />
+      ) : (
+        <div className="p-4 border border-gray-300 rounded-lg bg-gray-50">
+          <p className="text-gray-600 mb-3">댓글을 작성하려면 로그인이 필요합니다.</p>
+          <button
+            onClick={() => setShowLoginModal(true)}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+          >
+            로그인하기
+          </button>
+        </div>
+      )}
+
+      {/* 로그인 모달 */}
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
         />
       )}
 

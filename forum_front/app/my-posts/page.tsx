@@ -8,10 +8,12 @@ import { postApi } from '@/services/api'
 import type { PostListDTO } from '@/types/api'
 import Header from '@/components/Header'
 import PostCard from '@/components/PostCard'
+import LoginModal from '@/components/LoginModal'
 
 export default function MyPostsPage() {
   const router = useRouter()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [posts, setPosts] = useState<PostListDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
@@ -19,7 +21,7 @@ export default function MyPostsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/')
+      setShowLoginModal(true)
       return
     }
     fetchPosts()
@@ -59,12 +61,25 @@ export default function MyPostsPage() {
   }
 
   if (!isAuthenticated) {
-    return null
+    return (
+      <div className="min-h-screen bg-white">
+        <Header onLoginClick={() => setShowLoginModal(true)} />
+        {showLoginModal && (
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => {
+              setShowLoginModal(false)
+              router.push('/')
+            }}
+          />
+        )}
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen bg-white">
-      <Header onLoginClick={() => router.push('/')} />
+      <Header onLoginClick={() => setShowLoginModal(true)} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">내 게시글</h1>

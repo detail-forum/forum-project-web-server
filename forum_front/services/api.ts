@@ -189,7 +189,6 @@ export const postApi = {
     const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(
       '/post',
       { params }
-      { params: { page, size, sortType } }
     )
     
     // 30초 캐시

@@ -49,8 +49,9 @@ export default function PostDetailPage() {
   const renderMarkdown = (text: string): React.ReactNode => {
     if (!text) return ''
     
-    // 이미지 마크다운 패턴: ![alt](url)
-    const imagePattern = /!\[([^\]]*)\]\(([^)]+)\)/g
+    // 이미지 마크다운 패턴: ![alt](url) 또는 ![alt](url width="..." height="...")
+    // width/height 속성은 선택적이며, URL과 함께 파싱됨
+    const imagePattern = /!\[([^\]]*)\]\(([^)]+?)(?:\s+width=["']?\d+["']?\s*height=["']?\d+["']?)?\)/g
     const parts: React.ReactNode[] = []
     let lastIndex = 0
     let match
@@ -71,14 +72,28 @@ export default function PostDetailPage() {
       
       // 이미지 요소
       const alt = match[1] || '이미지'
-      const originalUrl = match[2]
+      let originalUrl = match[2]
       if (!originalUrl || !originalUrl.trim()) {
         // URL이 없으면 건너뛰기
         lastIndex = match.index + match[0].length
         continue
       }
       
-      let url = originalUrl.trim()
+      // 마크다운에서 width/height 추출
+      const widthMatch = match[0].match(/width=["']?(\d+)["']?/)
+      const heightMatch = match[0].match(/height=["']?(\d+)["']?/)
+      let imageWidth: number | null = widthMatch ? parseInt(widthMatch[1]) : null
+      let imageHeight: number | null = heightMatch ? parseInt(heightMatch[1]) : null
+      
+      // URL에서 width/height 속성 제거 (마크다운 확장 형식 지원)
+      originalUrl = originalUrl.trim()
+      originalUrl = originalUrl.replace(/\s+width=["']?\d+["']?\s*height=["']?\d+["']?/gi, '')
+      originalUrl = originalUrl.replace(/\s+height=["']?\d+["']?\s*width=["']?\d+["']?/gi, '')
+      originalUrl = originalUrl.replace(/\s+width=["']?\d+["']?/gi, '')
+      originalUrl = originalUrl.replace(/\s+height=["']?\d+["']?/gi, '')
+      originalUrl = originalUrl.trim()
+      
+      let url = originalUrl
       
       // URL 정규화
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -115,16 +130,37 @@ export default function PostDetailPage() {
           
           console.log('[이미지 URL 변환]', { originalUrl, convertedUrl: url, productionUrl, cleanUrl })
         }
-      }
+      } 
       
-      console.log('이미지 렌더링:', { alt, url, originalUrl })
+      console.log('이미지 렌더링:', { alt, url, originalUrl, imageWidth, imageHeight })
+      
+      // 기본 높이 300px 설정 (크기 정보가 없을 때)
+      const defaultHeight = 300
+      const finalHeight = imageHeight || defaultHeight
+      // width가 없으면 이미지 로드 후 종횡비에 맞춰 자동 계산
+      const finalWidth = imageWidth || undefined
       
       parts.push(
         <div key={`img-container-${keyCounter++}`} className="my-4">
           <img
             src={url}
             alt={alt}
-            className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm"
+            style={{
+              height: `${finalHeight}px`,
+              width: finalWidth ? `${finalWidth}px` : 'auto',
+              maxWidth: '100%',
+              objectFit: 'contain',
+            }}
+            className="rounded-lg border border-gray-200 shadow-sm"
+            onLoad={(e) => {
+              const img = e.currentTarget
+              console.log('이미지 로드 성공:', url)
+              // width가 없으면 종횡비에 맞춰 자동 계산
+              if (!finalWidth) {
+                const aspectRatio = img.naturalWidth / img.naturalHeight
+                img.style.width = `${finalHeight * aspectRatio}px`
+              }
+            }}
             onError={(e) => {
               console.error('이미지 로드 실패:', {
                 url,
@@ -141,9 +177,6 @@ export default function PostDetailPage() {
                 errorDiv.textContent = `이미지를 불러올 수 없습니다: ${url}`
                 container.appendChild(errorDiv)
               }
-            }}
-            onLoad={() => {
-              console.log('이미지 로드 성공:', url)
             }}
           />
         </div>

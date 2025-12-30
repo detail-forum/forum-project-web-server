@@ -3,6 +3,7 @@
 import { memo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import type { PostListDTO } from '@/types/api'
 // date-fns에서 필요한 함수만 임포트 (트리 쉐이킹)
 import { formatDistanceToNow } from 'date-fns'
@@ -14,6 +15,7 @@ interface PostCardProps {
 }
 
 function PostCard({ post }: PostCardProps) {
+  const router = useRouter()
   const [defaultImageUrl, setDefaultImageUrl] = useState<string>('')
   const [imageError, setImageError] = useState(false)
 
@@ -49,6 +51,12 @@ function PostCard({ post }: PostCardProps) {
     }
     // 기본 이미지 사용
     return defaultImageUrl
+  }
+
+  const handleTagClick = (e: React.MouseEvent, tag: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    router.push(`/posts-list?tag=${encodeURIComponent(tag)}`)
   }
 
   return (
@@ -92,6 +100,21 @@ function PostCard({ post }: PostCardProps) {
             <span>{post.likeCount ?? 0}</span>
           </span>
         </div>
+        {/* 태그 표시 */}
+        {post.tags && post.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {post.tags.map((tag, index) => (
+              <button
+                key={index}
+                onClick={(e) => handleTagClick(e, tag)}
+                className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full hover:bg-primary/20 transition-colors"
+                title={`${tag} 태그로 필터링`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </Link>
   )

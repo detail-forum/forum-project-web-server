@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public interface PostRepository extends JpaRepository<Post, Long> {
 
@@ -34,4 +35,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Modifying
     @Query("UPDATE Post p SET p.updatedTime = :updateTime WHERE p.id = :id")
     void updateModifiedTime(@Param("id") Long id, @Param("updateTime") LocalDateTime updateTime);
+    
+    // 태그 필터링을 위한 메서드들
+    @Query("SELECT p FROM Post p WHERE p.id IN :ids AND p.isDeleted = false ORDER BY p.createdTime DESC")
+    Page<Post> findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(@Param("ids") List<Long> ids, Pageable pageable);
+    
+    @Query("SELECT p FROM Post p WHERE p.id IN :ids AND p.isDeleted = false ORDER BY p.views DESC")
+    Page<Post> findAllByIdInAndIsDeletedFalseOrderByViewsDesc(@Param("ids") List<Long> ids, Pageable pageable);
+    
+    @Query("SELECT p FROM Post p WHERE p.id IN :ids AND p.isDeleted = false ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
+    Page<Post> findAllByIdInAndIsDeletedFalseOrderByLikesDesc(@Param("ids") List<Long> ids, Pageable pageable);
 }

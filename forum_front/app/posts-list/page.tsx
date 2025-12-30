@@ -19,11 +19,13 @@ function PostsListContent() {
   const [totalPages, setTotalPages] = useState(0)
   const [totalElements, setTotalElements] = useState(0)
   const [sortType, setSortType] = useState<SortType>('RESENT')
+  const [tag, setTag] = useState<string | null>(null)
 
   // URL 파라미터에서 초기값 읽기
   useEffect(() => {
     const pageParam = searchParams.get('page')
     const sortParam = searchParams.get('sort') as SortType | null
+    const tagParam = searchParams.get('tag')
     
     if (pageParam) {
       setPage(parseInt(pageParam) - 1) // URL은 1부터 시작, 내부는 0부터
@@ -31,12 +33,13 @@ function PostsListContent() {
     if (sortParam && (sortParam === 'RESENT' || sortParam === 'HITS' || sortParam === 'LIKES')) {
       setSortType(sortParam)
     }
+    setTag(tagParam)
   }, [searchParams])
 
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await postApi.getPostList(page, 10, sortType)
+      const response = await postApi.getPostList(page, 10, sortType, tag || undefined)
       if (response.success && response.data) {
         setPosts(response.data.content || [])
         setTotalPages(response.data.totalPages || 0)
@@ -47,7 +50,7 @@ function PostsListContent() {
     } finally {
       setLoading(false)
     }
-  }, [page, sortType])
+  }, [page, sortType, tag])
 
   useEffect(() => {
     fetchPosts()
@@ -56,13 +59,15 @@ function PostsListContent() {
   const handleSortChange = useCallback((newSortType: SortType) => {
     setSortType(newSortType)
     setPage(0) // 정렬 변경 시 첫 페이지로
-    router.push(`/posts-list?page=1&sort=${newSortType}`)
-  }, [router])
+    const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
+    router.push(`/posts-list?page=1&sort=${newSortType}${tagParam}`)
+  }, [router, tag])
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage)
-    router.push(`/posts-list?page=${newPage + 1}&sort=${sortType}`)
-  }, [router, sortType])
+    const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
+    router.push(`/posts-list?page=${newPage + 1}&sort=${sortType}${tagParam}`)
+  }, [router, sortType, tag])
 
   return (
     <div className="min-h-screen bg-white">
@@ -70,8 +75,20 @@ function PostsListContent() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">전체 게시글</h1>
-            <p className="text-gray-600">총 {totalElements}개의 게시글</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {tag ? `#${tag} 태그 게시글` : '전체 게시글'}
+            </h1>
+            <p className="text-gray-600">
+              {tag ? `#${tag} 태그가 포함된 ` : ''}총 {totalElements}개의 게시글
+              {tag && (
+                <button
+                  onClick={() => router.push('/posts-list?page=1&sort=RESENT')}
+                  className="ml-2 text-primary hover:underline"
+                >
+                  필터 제거
+                </button>
+              )}
+            </p>
           </div>
 
           {/* 필터 - 오른쪽 배치 */}

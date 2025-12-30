@@ -21,6 +21,7 @@ export default function EditPostPage() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [post, setPost] = useState<PostDetailDTO | null>(null)
   const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '' })
+  const [tagInput, setTagInput] = useState('')
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
   const [showCropModal, setShowCropModal] = useState(false)
@@ -79,11 +80,13 @@ export default function EditPostPage() {
 
         setPost(postData)
         const profileImageUrl = (postData as any).profileImageUrl || ''
+        const tags = postData.tags || []
         setFormData({
           title: postData.title,
           body: postData.body,
           profileImageUrl: profileImageUrl,
         })
+        setTagInput(tags.join(', '))
         
         // 프로필 이미지 미리보기 설정
         if (profileImageUrl) {
@@ -108,7 +111,7 @@ export default function EditPostPage() {
     setSaving(true)
 
     try {
-      const updateData: { title?: string; body?: string; profileImageUrl?: string } = {}
+      const updateData: { title?: string; body?: string; profileImageUrl?: string; tags?: string[] } = {}
       if (formData.title !== post?.title) {
         updateData.title = formData.title
       }
@@ -118,6 +121,17 @@ export default function EditPostPage() {
       const currentProfileImageUrl = (post as any)?.profileImageUrl || ''
       if (formData.profileImageUrl !== currentProfileImageUrl) {
         updateData.profileImageUrl = formData.profileImageUrl
+      }
+      
+      // 태그 처리
+      const currentTags = post?.tags || []
+      const newTags = tagInput
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
+      const tagsChanged = JSON.stringify([...currentTags].sort()) !== JSON.stringify([...newTags].sort())
+      if (tagsChanged) {
+        updateData.tags = newTags.length > 0 ? newTags : []
       }
 
       // 변경사항이 없어도 저장 성공으로 처리
@@ -614,6 +628,39 @@ export default function EditPostPage() {
               minLength={10}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
+          </div>
+
+          <div>
+            <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
+              태그 (쉼표로 구분)
+            </label>
+            <input
+              type="text"
+              id="tags"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="예: redux, react"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              태그를 쉼표로 구분하여 입력하세요. 예: redux, react, javascript
+            </p>
+            {tagInput && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tagInput
+                  .split(',')
+                  .map(tag => tag.trim())
+                  .filter(tag => tag.length > 0)
+                  .map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 bg-primary text-white text-sm rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
 
           <div>

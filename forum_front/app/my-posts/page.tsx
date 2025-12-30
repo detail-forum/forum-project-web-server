@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { postApi } from '@/services/api'
@@ -12,12 +12,19 @@ import LoginModal from '@/components/LoginModal'
 
 export default function MyPostsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [posts, setPosts] = useState<PostListDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [tag, setTag] = useState<string | null>(null)
+
+  useEffect(() => {
+    const tagParam = searchParams.get('tag')
+    setTag(tagParam)
+  }, [searchParams])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -25,12 +32,12 @@ export default function MyPostsPage() {
     } else {
       fetchPosts()
     }
-  }, [page, isAuthenticated])
+  }, [page, isAuthenticated, tag])
 
   const fetchPosts = async () => {
     try {
       setLoading(true)
-      const response = await postApi.getMyPostList(page, 10, 'RESENT')
+      const response = await postApi.getMyPostList(page, 10, 'RESENT', tag || undefined)
       if (response.success && response.data) {
         setPosts(response.data.content || [])
         setTotalPages(response.data.totalPages || 0)
@@ -86,8 +93,20 @@ export default function MyPostsPage() {
       {isAuthenticated && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">내 게시글</h1>
-            <p className="text-gray-600">작성한 게시글을 관리하세요</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {tag ? `#${tag} 태그 내 게시글` : '내 게시글'}
+            </h1>
+            <p className="text-gray-600">
+              {tag ? `#${tag} 태그가 포함된 ` : ''}작성한 게시글을 관리하세요
+              {tag && (
+                <button
+                  onClick={() => router.push('/my-posts')}
+                  className="ml-2 text-primary hover:underline"
+                >
+                  필터 제거
+                </button>
+              )}
+            </p>
           </div>
 
         {loading && posts.length === 0 ? (

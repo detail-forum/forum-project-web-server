@@ -168,17 +168,27 @@ export const authApi = {
 
 // Post API
 export const postApi = {
-  getPostList: async (page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
-    // 캐시 키 생성
-    const cacheKey = `postList_${page}_${size}_${sortType}`
+  getPostList: async (page: number = 0, size: number = 10, sortType: string = 'RESENT', tag?: string): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    // 캐시 키 생성 (태그 포함)
+    const cacheKey = `postList_${page}_${size}_${sortType}_${tag || ''}`
     const cached = cache.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(cacheKey)
     
     if (cached) {
       return cached
     }
 
+    const params: any = {
+      page,
+      size,
+      sortType,
+    }
+    if (tag) {
+      params.tag = tag
+    }
+
     const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(
       '/post',
+      { params }
       { params: { page, size, sortType } }
     )
     
@@ -187,10 +197,14 @@ export const postApi = {
     return response.data
   },
 
-  getMyPostList: async (page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+  getMyPostList: async (page: number = 0, size: number = 10, sortType: string = 'RESENT', tag?: string): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    const params: any = { page, size, sortType }
+    if (tag) {
+      params.tag = tag
+    }
     const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(
       '/post/my-post',
-      { params: { page, size, sortType } }
+      { params }
     )
     return response.data
   },

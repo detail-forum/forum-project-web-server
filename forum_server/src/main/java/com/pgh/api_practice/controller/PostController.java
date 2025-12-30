@@ -17,24 +17,36 @@ public class PostController {
     private final PostService postService;
 
     /** ✅ 내 게시글 목록 조회 */
-    // GET http://localhost:8081/post/my-post?sortType=RESENT
+    // GET http://localhost:8081/post/my-post?sortType=RESENT&tag=react
     @GetMapping("/my-post")
     public ResponseEntity<ApiResponse<Page<PostListDTO>>> getMyPostList(
             Pageable pageable,
-            @RequestParam(defaultValue = "RESENT") String sortType
+            @RequestParam(defaultValue = "RESENT") String sortType,
+            @RequestParam(required = false) String tag
     ) {
-        Page<PostListDTO> list = postService.getMyPostList(pageable, sortType);
+        Page<PostListDTO> list;
+        if (tag != null && !tag.trim().isEmpty()) {
+            list = postService.getMyPostListByTag(pageable, tag.trim().toLowerCase(), sortType);
+        } else {
+            list = postService.getMyPostList(pageable, sortType);
+        }
         return ResponseEntity.ok(ApiResponse.ok(list, "내 게시글 조회 성공"));
     }
 
     /** ✅ 전체 게시글 목록 조회 */
-    // GET http://localhost:8081/post?sortType=HITS
+    // GET http://localhost:8081/post?sortType=HITS&tag=react
     @GetMapping
     public ResponseEntity<ApiResponse<Page<PostListDTO>>> getPostList(
             Pageable pageable,
-            @RequestParam(defaultValue = "RESENT") String sortType
+            @RequestParam(defaultValue = "RESENT") String sortType,
+            @RequestParam(required = false) String tag
     ) {
-        Page<PostListDTO> list = postService.getPostList(pageable, sortType);
+        Page<PostListDTO> list;
+        if (tag != null && !tag.trim().isEmpty()) {
+            list = postService.getPostListByTag(pageable, tag.trim().toLowerCase(), sortType);
+        } else {
+            list = postService.getPostList(pageable, sortType);
+        }
         return ResponseEntity.ok(ApiResponse.ok(list, "전체 게시글 조회 성공"));
     }
 

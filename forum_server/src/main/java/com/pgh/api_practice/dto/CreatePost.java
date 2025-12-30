@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 public class CreatePost {
@@ -15,4 +17,6 @@ public class CreatePost {
     private String body;//7자 이상
 
     private String profileImageUrl;  // 게시물 프로필 이미지 URL
+
+    private List<String> tags;  // 태그 목록
 }

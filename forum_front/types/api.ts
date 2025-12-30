@@ -35,6 +35,7 @@ export interface PostListDTO {
   updateDateTime: string
   profileImageUrl?: string  // 게시물 프로필 이미지 URL
   likeCount: number
+  tags?: string[]  // 태그 목록
 }
 
 export interface PostDetailDTO {
@@ -48,18 +49,21 @@ export interface PostDetailDTO {
   profileImageUrl?: string
   likeCount: number
   isLiked: boolean
+  tags?: string[]  // 태그 목록
 }
 
 export interface CreatePost {
   title: string
   body: string
   profileImageUrl?: string
+  tags?: string[]  // 태그 목록
 }
 
 export interface PatchPost {
   title?: string
   body?: string
   profileImageUrl?: string
+  tags?: string[]  // 태그 목록
 }
 
 export interface CommentDTO {

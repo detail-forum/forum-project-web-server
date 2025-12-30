@@ -516,15 +516,30 @@ export default function PostDetailPage() {
                     {renderMarkdown(post.body)}
                   </div>
                 </div>
-                <div className="mt-8 pt-8 border-t flex justify-between items-center">
-                  <button
-                    onClick={() => router.back()}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    목록으로
-                  </button>
-                  <div className="flex items-center space-x-4">
-                    {/* 좋아요 버튼 */}
+                    {/* 태그 표시 */}
+                    {post.tags && post.tags.length > 0 && (
+                      <div className="mt-6 flex flex-wrap gap-2">
+                        {post.tags.map((tag, index) => (
+                          <button
+                            key={index}
+                            onClick={() => router.push(`/posts-list?tag=${encodeURIComponent(tag)}`)}
+                            className="px-3 py-1 bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors text-sm"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="mt-8 pt-8 border-t flex justify-between items-center">
+                      <button
+                        onClick={() => router.back()}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        목록으로
+                      </button>
+                      <div className="flex items-center space-x-4">
+                        {/* 좋아요 버튼 */}
                     <button
                       onClick={handleLike}
                       disabled={liking || !isAuthenticated}

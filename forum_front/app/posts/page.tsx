@@ -15,7 +15,8 @@ export default function CreatePostPage() {
   const router = useRouter()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '' })
+  const [formData, setFormData] = useState({ title: '', body: '', profileImageUrl: '', tags: [] as string[] })
+  const [tagInput, setTagInput] = useState('')
   const [profileImagePreview, setProfileImagePreview] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
   const [showCropModal, setShowCropModal] = useState(false)
@@ -56,9 +57,19 @@ export default function CreatePostPage() {
     setLoading(true)
 
     try {
-      // 프로필 이미지 URL이 있는지 확인
-      console.log('제출할 데이터:', formData)
-      const response = await postApi.createPost(formData)
+      // 태그 문자열을 배열로 변환 (쉼표로 구분, 공백 제거, 빈 값 제거)
+      const tags = tagInput
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
+      
+      const submitData = {
+        ...formData,
+        tags: tags.length > 0 ? tags : undefined,
+      }
+      
+      console.log('제출할 데이터:', submitData)
+      const response = await postApi.createPost(submitData)
       if (response.success) {
         router.push('/')
       }
@@ -256,6 +267,39 @@ export default function CreatePostPage() {
               minLength={10}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
+          </div>
+
+          <div>
+            <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
+              태그 (쉼표로 구분)
+            </label>
+            <input
+              type="text"
+              id="tags"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="예: redux, react"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              태그를 쉼표로 구분하여 입력하세요. 예: redux, react, javascript
+            </p>
+            {tagInput && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tagInput
+                  .split(',')
+                  .map(tag => tag.trim())
+                  .filter(tag => tag.length > 0)
+                  .map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 bg-primary text-white text-sm rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
 
           <div>

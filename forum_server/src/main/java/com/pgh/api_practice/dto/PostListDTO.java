@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -19,4 +20,5 @@ public class PostListDTO {
     private LocalDateTime updateDateTime;
     private String profileImageUrl;
     private long likeCount;
+    private List<String> tags;
 }

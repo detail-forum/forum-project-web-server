@@ -6,21 +6,29 @@ import com.pgh.api_practice.dto.PostDetailDTO;
 import com.pgh.api_practice.dto.PostListDTO;
 import com.pgh.api_practice.entity.Post;
 import com.pgh.api_practice.entity.PostLike;
+import com.pgh.api_practice.entity.PostTag;
+import com.pgh.api_practice.entity.Tag;
 import com.pgh.api_practice.entity.Users;
 import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
 import com.pgh.api_practice.exception.ResourceNotFoundException;
 import com.pgh.api_practice.repository.PostLikeRepository;
 import com.pgh.api_practice.repository.PostRepository;
+import com.pgh.api_practice.repository.PostTagRepository;
+import com.pgh.api_practice.repository.TagRepository;
 import com.pgh.api_practice.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -29,8 +37,11 @@ public class PostService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
     private final PostLikeRepository postLikeRepository;
+    private final TagRepository tagRepository;
+    private final PostTagRepository postTagRepository;
 
     /** ✅ 게시글 저장 */
+    @Transactional
     public long savePost(CreatePost dto) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
@@ -50,7 +61,45 @@ public class PostService {
                 .build();
 
         Post created = postRepository.save(post);
+        
+        // 태그 저장
+        if (dto.getTags() != null && !dto.getTags().isEmpty()) {
+            saveTags(created, dto.getTags());
+        }
+        
         return created.getId();
+    }
+    
+    /** 태그 저장 헬퍼 메서드 */
+    private void saveTags(Post post, List<String> tagNames) {
+        for (String tagName : tagNames) {
+            if (tagName == null || tagName.trim().isEmpty()) {
+                continue;
+            }
+            
+            String trimmedTagName = tagName.trim().toLowerCase();
+            
+            // 태그가 이미 존재하는지 확인
+            Tag tag = tagRepository.findByName(trimmedTagName)
+                    .orElseGet(() -> {
+                        Tag newTag = Tag.builder()
+                                .name(trimmedTagName)
+                                .build();
+                        return tagRepository.save(newTag);
+                    });
+            
+            // PostTag 관계 생성 (중복 체크)
+            boolean exists = postTagRepository.findByPostId(post.getId()).stream()
+                    .anyMatch(pt -> pt.getTag().getId().equals(tag.getId()));
+            
+            if (!exists) {
+                PostTag postTag = PostTag.builder()
+                        .post(post)
+                        .tag(tag)
+                        .build();
+                postTagRepository.save(postTag);
+            }
+        }
     }
 
     /** ✅ 단건 조회 (조회수 증가 포함) */
@@ -90,6 +139,11 @@ public class PostService {
                 isLiked = postLikeRepository.existsByPostIdAndUserId(post.getId(), user.getId());
             }
         }
+        
+        // 태그 조회
+        List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                .map(pt -> pt.getTag().getName())
+                .collect(Collectors.toList());
 
         return PostDetailDTO.builder()
                 .title(post.getTitle())
@@ -101,6 +155,7 @@ public class PostService {
                 .profileImageUrl(post.getProfileImageUrl())
                 .likeCount(likeCount)
                 .isLiked(isLiked)
+                .tags(tags)
                 .build();
     }
 
@@ -179,6 +234,11 @@ public class PostService {
             // 좋아요 수 조회
             long likeCount = postLikeRepository.countByPostId(post.getId());
             
+            // 태그 조회
+            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                    .map(pt -> pt.getTag().getName())
+                    .collect(Collectors.toList());
+            
             return PostListDTO.builder()
                     .id(post.getId())
                     .title(post.getTitle())
@@ -188,6 +248,112 @@ public class PostService {
                     .updateDateTime(updateTime)
                     .profileImageUrl(post.getProfileImageUrl())
                     .likeCount(likeCount)
+                    .tags(tags)
+                    .build();
+        });
+    }
+    
+    /** ✅ 태그로 게시글 목록 조회 */
+    @Transactional(readOnly = true)
+    public Page<PostListDTO> getPostListByTag(Pageable pageable, String tagName, String sortType) {
+        List<Long> postIds = postTagRepository.findPostIdsByTagName(tagName);
+        
+        if (postIds.isEmpty()) {
+            return new PageImpl<>(new ArrayList<>(), pageable, 0);
+        }
+        
+        Page<Post> posts;
+        
+        if ("RESENT".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+        } else if ("HITS".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByViewsDesc(postIds, pageable);
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByLikesDesc(postIds, pageable);
+        } else {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+        }
+        
+        return posts.map(post -> {
+            LocalDateTime updateTime = post.getUpdatedTime();
+            if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
+                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                updateTime = post.getCreatedTime();
+            }
+            
+            long likeCount = postLikeRepository.countByPostId(post.getId());
+            
+            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                    .map(pt -> pt.getTag().getName())
+                    .collect(Collectors.toList());
+            
+            return PostListDTO.builder()
+                    .id(post.getId())
+                    .title(post.getTitle())
+                    .username(post.getUser().getUsername())
+                    .views(post.getViews())
+                    .createDateTime(post.getCreatedTime())
+                    .updateDateTime(updateTime)
+                    .profileImageUrl(post.getProfileImageUrl())
+                    .likeCount(likeCount)
+                    .tags(tags)
+                    .build();
+        });
+    }
+    
+    /** ✅ 내 게시글 목록 - 태그 필터 */
+    @Transactional(readOnly = true)
+    public Page<PostListDTO> getMyPostListByTag(Pageable pageable, String tagName, String sortType) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        
+        String requestUsername = authentication.getName();
+        Users user = userRepository.findByUsername(requestUsername)
+                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
+        
+        List<Long> postIds = postTagRepository.findPostIdsByTagNameAndUserId(tagName, user.getId());
+        
+        if (postIds.isEmpty()) {
+            return new PageImpl<>(new ArrayList<>(), pageable, 0);
+        }
+        
+        Page<Post> posts;
+        
+        if ("RESENT".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+        } else if ("HITS".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByViewsDesc(postIds, pageable);
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByLikesDesc(postIds, pageable);
+        } else {
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+        }
+        
+        return posts.map(post -> {
+            LocalDateTime updateTime = post.getUpdatedTime();
+            if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
+                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                updateTime = post.getCreatedTime();
+            }
+            
+            long likeCount = postLikeRepository.countByPostId(post.getId());
+            
+            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                    .map(pt -> pt.getTag().getName())
+                    .collect(Collectors.toList());
+            
+            return PostListDTO.builder()
+                    .id(post.getId())
+                    .title(post.getTitle())
+                    .username(post.getUser().getUsername())
+                    .views(post.getViews())
+                    .createDateTime(post.getCreatedTime())
+                    .updateDateTime(updateTime)
+                    .profileImageUrl(post.getProfileImageUrl())
+                    .likeCount(likeCount)
+                    .tags(tags)
                     .build();
         });
     }
@@ -284,6 +450,15 @@ public class PostService {
             isModified = true;
         }
 
+        // 태그 업데이트
+        if (dto.getTags() != null) {
+            // 기존 태그 삭제
+            postTagRepository.deleteByPostId(post.getId());
+            // 새 태그 저장
+            saveTags(post, dto.getTags());
+            isModified = true;
+        }
+        
         // 변경사항이 있을 때만 저장
         if (isModified) {
             // 명시적으로 수정 시간 설정 (확실하게 업데이트되도록)

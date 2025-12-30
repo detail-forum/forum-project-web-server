@@ -36,14 +36,23 @@ public class PostController {
     }
 
     /** ✅ 전체 게시글 목록 조회 */
-    // GET http://localhost:8081/post?sortType=HITS&tag=react
+    // GET http://localhost:8081/post?sortType=HITS&tag=react&search=키워드
     @GetMapping
     public ResponseEntity<ApiResponse<Page<PostListDTO>>> getPostList(
             Pageable pageable,
             @RequestParam(defaultValue = "RESENT") String sortType,
-            @RequestParam(required = false) String tag
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String search
     ) {
         Page<PostListDTO> list;
+        
+        // 검색어가 있으면 검색 결과 반환
+        if (search != null && !search.trim().isEmpty()) {
+            list = postService.searchPosts(pageable, search.trim(), sortType);
+            return ResponseEntity.ok(ApiResponse.ok(list, "검색 결과 조회 성공"));
+        }
+        
+        // 태그 필터링
         if (tag != null && !tag.trim().isEmpty()) {
             list = postService.getPostListByTag(pageable, tag.trim().toLowerCase(), sortType);
         } else {

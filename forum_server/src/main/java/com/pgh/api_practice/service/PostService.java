@@ -490,4 +490,52 @@ public class PostService {
         
         return postTagRepository.findDistinctTagNamesByUserId(user.getId());
     }
+    
+    /** ✅ 게시글 검색 */
+    @Transactional(readOnly = true)
+    public Page<PostListDTO> searchPosts(Pageable pageable, String keyword, String sortType) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            // 검색어가 없으면 일반 목록 반환
+            return getPostList(pageable, sortType);
+        }
+        
+        String searchKeyword = keyword.trim();
+        Page<Post> posts;
+        
+        if ("RESENT".equalsIgnoreCase(sortType)) {
+            posts = postRepository.searchPostsByKeyword(searchKeyword, pageable);
+        } else if ("HITS".equalsIgnoreCase(sortType)) {
+            posts = postRepository.searchPostsByKeywordOrderByViews(searchKeyword, pageable);
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            posts = postRepository.searchPostsByKeywordOrderByLikes(searchKeyword, pageable);
+        } else {
+            posts = postRepository.searchPostsByKeyword(searchKeyword, pageable);
+        }
+        
+        return posts.map(post -> {
+            LocalDateTime updateTime = post.getUpdatedTime();
+            if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
+                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                updateTime = post.getCreatedTime();
+            }
+            
+            long likeCount = postLikeRepository.countByPostId(post.getId());
+            
+            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                    .map(pt -> pt.getTag().getName())
+                    .collect(Collectors.toList());
+            
+            return PostListDTO.builder()
+                    .id(post.getId())
+                    .title(post.getTitle())
+                    .username(post.getUser().getUsername())
+                    .views(post.getViews())
+                    .createDateTime(post.getCreatedTime())
+                    .updateDateTime(updateTime)
+                    .profileImageUrl(post.getProfileImageUrl())
+                    .likeCount(likeCount)
+                    .tags(tags)
+                    .build();
+        });
+    }
 }

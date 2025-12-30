@@ -168,9 +168,9 @@ export const authApi = {
 
 // Post API
 export const postApi = {
-  getPostList: async (page: number = 0, size: number = 10, sortType: string = 'RESENT', tag?: string): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
-    // 캐시 키 생성 (태그 포함)
-    const cacheKey = `postList_${page}_${size}_${sortType}_${tag || ''}`
+  getPostList: async (page: number = 0, size: number = 10, sortType: string = 'RESENT', tag?: string, search?: string): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    // 캐시 키 생성 (태그, 검색어 포함)
+    const cacheKey = `postList_${page}_${size}_${sortType}_${tag || ''}_${search || ''}`
     const cached = cache.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(cacheKey)
     
     if (cached) {
@@ -185,14 +185,19 @@ export const postApi = {
     if (tag) {
       params.tag = tag
     }
+    if (search) {
+      params.search = search
+    }
 
     const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(
       '/post',
       { params }
     )
     
-    // 30초 캐시
-    cache.set(cacheKey, response.data, 30000)
+    // 검색 결과는 캐시하지 않음 (검색어가 없을 때만 캐시)
+    if (!search) {
+      cache.set(cacheKey, response.data, 30000)
+    }
     return response.data
   },
 

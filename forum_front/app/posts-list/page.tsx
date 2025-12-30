@@ -20,12 +20,15 @@ function PostsListContent() {
   const [totalElements, setTotalElements] = useState(0)
   const [sortType, setSortType] = useState<SortType>('RESENT')
   const [tag, setTag] = useState<string | null>(null)
+  const [searchKeyword, setSearchKeyword] = useState<string>('')
+  const [searchInput, setSearchInput] = useState<string>('')
 
   // URL 파라미터에서 초기값 읽기
   useEffect(() => {
     const pageParam = searchParams.get('page')
     const sortParam = searchParams.get('sort') as SortType | null
     const tagParam = searchParams.get('tag')
+    const searchParam = searchParams.get('search')
     
     if (pageParam) {
       setPage(parseInt(pageParam) - 1) // URL은 1부터 시작, 내부는 0부터
@@ -34,12 +37,14 @@ function PostsListContent() {
       setSortType(sortParam)
     }
     setTag(tagParam)
+    setSearchKeyword(searchParam || '')
+    setSearchInput(searchParam || '')
   }, [searchParams])
 
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await postApi.getPostList(page, 10, sortType, tag || undefined)
+      const response = await postApi.getPostList(page, 10, sortType, tag || undefined, searchKeyword || undefined)
       if (response.success && response.data) {
         setPosts(response.data.content || [])
         setTotalPages(response.data.totalPages || 0)
@@ -50,7 +55,7 @@ function PostsListContent() {
     } finally {
       setLoading(false)
     }
-  }, [page, sortType, tag])
+  }, [page, sortType, tag, searchKeyword])
 
   useEffect(() => {
     fetchPosts()
@@ -60,36 +65,84 @@ function PostsListContent() {
     setSortType(newSortType)
     setPage(0) // 정렬 변경 시 첫 페이지로
     const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
-    router.push(`/posts-list?page=1&sort=${newSortType}${tagParam}`)
-  }, [router, tag])
+    const searchParam = searchKeyword ? `&search=${encodeURIComponent(searchKeyword)}` : ''
+    router.push(`/posts-list?page=1&sort=${newSortType}${tagParam}${searchParam}`)
+  }, [router, tag, searchKeyword])
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage)
     const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
-    router.push(`/posts-list?page=${newPage + 1}&sort=${sortType}${tagParam}`)
+    const searchParam = searchKeyword ? `&search=${encodeURIComponent(searchKeyword)}` : ''
+    router.push(`/posts-list?page=${newPage + 1}&sort=${sortType}${tagParam}${searchParam}`)
+  }, [router, sortType, tag, searchKeyword])
+
+  const handleSearch = useCallback((e: React.FormEvent) => {
+    e.preventDefault()
+    setPage(0)
+    const searchValue = searchInput.trim()
+    const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
+    const searchParam = searchValue ? `&search=${encodeURIComponent(searchValue)}` : ''
+    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}${searchParam}`)
+  }, [router, sortType, tag, searchInput])
+
+  const handleClearSearch = useCallback(() => {
+    setSearchInput('')
+    setPage(0)
+    const tagParam = tag ? `&tag=${encodeURIComponent(tag)}` : ''
+    router.push(`/posts-list?page=1&sort=${sortType}${tagParam}`)
   }, [router, sortType, tag])
 
   return (
     <div className="min-h-screen bg-white">
       <Header onLoginClick={() => router.push('/')} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {tag ? `#${tag} 태그 게시글` : '전체 게시글'}
-            </h1>
-            <p className="text-gray-600">
-              {tag ? `#${tag} 태그가 포함된 ` : ''}총 {totalElements}개의 게시글
-              {tag && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                {searchKeyword ? `"${searchKeyword}" 검색 결과` : tag ? `#${tag} 태그 게시글` : '전체 게시글'}
+              </h1>
+              <p className="text-gray-600">
+                {searchKeyword ? `"${searchKeyword}" 검색 결과 ` : tag ? `#${tag} 태그가 포함된 ` : ''}총 {totalElements}개의 게시글
+                {(tag || searchKeyword) && (
+                  <button
+                    onClick={() => router.push('/posts-list?page=1&sort=RESENT')}
+                    className="ml-2 text-primary hover:underline"
+                  >
+                    필터 제거
+                  </button>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* 검색 입력 필드 */}
+          <form onSubmit={handleSearch} className="mb-4">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="제목 또는 본문에서 검색..."
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              <button
+                type="submit"
+                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+              >
+                검색
+              </button>
+              {searchKeyword && (
                 <button
-                  onClick={() => router.push('/posts-list?page=1&sort=RESENT')}
-                  className="ml-2 text-primary hover:underline"
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
-                  필터 제거
+                  검색 초기화
                 </button>
               )}
-            </p>
-          </div>
+            </div>
+          </form>
 
           {/* 필터 - 오른쪽 배치 */}
           <div className="flex items-center space-x-4">

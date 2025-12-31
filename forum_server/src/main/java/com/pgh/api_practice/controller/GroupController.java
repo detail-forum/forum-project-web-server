@@ -101,6 +101,16 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.ok(roomId, "채팅방이 생성되었습니다."));
     }
 
+    /** 채팅방 수정 */
+    @PatchMapping("/{groupId}/chat-rooms/{roomId}")
+    public ResponseEntity<ApiResponse<Void>> updateChatRoom(
+            @PathVariable Long groupId,
+            @PathVariable Long roomId,
+            @Valid @RequestBody UpdateGroupChatRoomDTO dto) {
+        groupService.updateChatRoom(groupId, roomId, dto);
+        return ResponseEntity.ok(ApiResponse.ok("채팅방 정보가 수정되었습니다."));
+    }
+
     /** 채팅방 삭제 */
     @DeleteMapping("/{groupId}/chat-rooms/{roomId}")
     public ResponseEntity<ApiResponse<Void>> deleteChatRoom(

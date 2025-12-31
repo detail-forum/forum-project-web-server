@@ -409,6 +409,11 @@ export const groupApi = {
     return response.data
   },
 
+  updateChatRoom: async (groupId: number, roomId: number, data: import('@/types/api').UpdateGroupChatRoomDTO): Promise<ApiResponse<void>> => {
+    const response = await apiClient.patch<ApiResponse<void>>(`/group/${groupId}/chat-rooms/${roomId}`, data)
+    return response.data
+  },
+
   deleteChatRoom: async (groupId: number, roomId: number): Promise<ApiResponse<void>> => {
     const response = await apiClient.delete<ApiResponse<void>>(`/group/${groupId}/chat-rooms/${roomId}`)
     return response.data

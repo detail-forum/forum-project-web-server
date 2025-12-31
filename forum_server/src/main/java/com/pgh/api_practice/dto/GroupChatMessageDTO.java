@@ -14,5 +14,6 @@ public class GroupChatMessageDTO {
     private String username;
     private String nickname;
     private String profileImageUrl;
+    private boolean isAdmin;
     private LocalDateTime createdTime;
 }

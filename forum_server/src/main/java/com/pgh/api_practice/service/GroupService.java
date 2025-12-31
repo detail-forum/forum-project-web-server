@@ -331,6 +331,7 @@ public class GroupService {
                         .id(room.getId())
                         .name(room.getName())
                         .description(room.getDescription())
+                        .profileImageUrl(room.getProfileImageUrl())
                         .isAdminRoom(room.isAdminRoom())
                         .createdTime(room.getCreatedTime())
                         .build())
@@ -363,6 +364,40 @@ public class GroupService {
 
         GroupChatRoom created = groupChatRoomRepository.save(room);
         return created.getId();
+    }
+
+    /** 채팅방 수정 */
+    @Transactional
+    public void updateChatRoom(Long groupId, Long roomId, UpdateGroupChatRoomDTO dto) {
+        Users currentUser = getCurrentUser();
+        if (currentUser == null) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+
+        Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
+
+        GroupChatRoom room = groupChatRoomRepository.findByIdAndIsDeletedFalse(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("채팅방을 찾을 수 없습니다."));
+
+        // 관리자만 채팅방 수정 가능
+        Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
+        boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
+        if (!isOwner && (member.isEmpty() || !member.get().isAdmin())) {
+            throw new ApplicationUnauthorizedException("모임 관리자만 채팅방을 수정할 수 있습니다.");
+        }
+
+        if (dto.getName() != null && !dto.getName().trim().isEmpty()) {
+            room.setName(dto.getName());
+        }
+        if (dto.getDescription() != null) {
+            room.setDescription(dto.getDescription());
+        }
+        if (dto.getProfileImageUrl() != null) {
+            room.setProfileImageUrl(dto.getProfileImageUrl());
+        }
+
+        groupChatRoomRepository.save(room);
     }
 
     /** 채팅방 삭제 */
@@ -456,13 +491,26 @@ public class GroupService {
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
         List<GroupChatMessage> messages = groupChatMessageRepository.findRecentMessages(roomId, pageable);
 
-        return messages.stream().map(msg -> GroupChatMessageDTO.builder()
-                .id(msg.getId())
-                .message(msg.getMessage())
-                .username(msg.getUser().getUsername())
-                .nickname(msg.getUser().getNickname())
-                .profileImageUrl(msg.getUser().getProfileImageUrl())
-                .createdTime(msg.getCreatedTime())
-                .build()).collect(Collectors.toList());
+        // 모임 주인과 관리자 목록 확인
+        Long ownerId = group.getOwner().getId();
+        List<Long> adminIds = groupMemberRepository.findByGroupId(groupId).stream()
+                .filter(m -> m.isAdmin())
+                .map(m -> m.getUser().getId())
+                .collect(Collectors.toList());
+
+        return messages.stream().map(msg -> {
+            Long userId = msg.getUser().getId();
+            boolean isAdmin = userId.equals(ownerId) || adminIds.contains(userId);
+            
+            return GroupChatMessageDTO.builder()
+                    .id(msg.getId())
+                    .message(msg.getMessage())
+                    .username(msg.getUser().getUsername())
+                    .nickname(msg.getUser().getNickname())
+                    .profileImageUrl(msg.getUser().getProfileImageUrl())
+                    .isAdmin(isAdmin)
+                    .createdTime(msg.getCreatedTime())
+                    .build();
+        }).collect(Collectors.toList());
     }
 }

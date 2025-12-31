@@ -32,6 +32,9 @@ public class GroupChatRoom {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
+
     @Builder.Default
     @Column(name = "is_admin_room", nullable = false)
     private boolean isAdminRoom = false;

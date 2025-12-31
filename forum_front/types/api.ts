@@ -211,6 +211,7 @@ export interface GroupChatRoomDTO {
   id: number
   name: string
   description?: string
+  profileImageUrl?: string
   isAdminRoom: boolean
   createdTime: string
 }
@@ -220,12 +221,19 @@ export interface CreateGroupChatRoomDTO {
   description?: string
 }
 
+export interface UpdateGroupChatRoomDTO {
+  name?: string
+  description?: string
+  profileImageUrl?: string
+}
+
 export interface GroupChatMessageDTO {
   id: number
   message: string
   username: string
   nickname: string
   profileImageUrl?: string
+  isAdmin: boolean
   createdTime: string
 }
 

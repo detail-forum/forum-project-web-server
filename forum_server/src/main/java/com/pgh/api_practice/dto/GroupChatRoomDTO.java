@@ -12,6 +12,7 @@ public class GroupChatRoomDTO {
     private Long id;
     private String name;
     private String description;
+    private String profileImageUrl;
     private boolean isAdminRoom;
     private LocalDateTime createdTime;
 }

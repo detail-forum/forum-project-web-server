@@ -7,11 +7,12 @@ import { authApi } from '@/services/api'
 import { useRouter } from 'next/navigation'
 
 interface LoginModalProps {
-  isOpen: boolean
+  isOpen?: boolean
   onClose: () => void
+  onLoginSuccess?: () => void
 }
 
-export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
+export default function LoginModal({ isOpen = true, onClose, onLoginSuccess }: LoginModalProps) {
   const [isLogin, setIsLogin] = useState(true)
   const [formData, setFormData] = useState({
     username: '',
@@ -43,6 +44,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             refreshToken: response.data.refreshToken,
           }))
           onClose()
+          if (onLoginSuccess) {
+            onLoginSuccess()
+          }
           router.refresh()
         }
       } else {
@@ -64,6 +68,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               refreshToken: loginResponse.data.refreshToken,
             }))
             onClose()
+            if (onLoginSuccess) {
+              onLoginSuccess()
+            }
             router.refresh()
           }
         }

@@ -242,6 +242,7 @@ export default function EditGroupPostPage() {
 
       {showLoginModal && (
         <LoginModal
+          isOpen={showLoginModal}
           onClose={() => setShowLoginModal(false)}
           onLoginSuccess={() => {
             setShowLoginModal(false)

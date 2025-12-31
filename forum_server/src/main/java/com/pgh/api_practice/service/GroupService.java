@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -493,14 +494,21 @@ public class GroupService {
 
         // 모임 주인과 관리자 목록 확인
         Long ownerId = group.getOwner().getId();
-        List<Long> adminIds = groupMemberRepository.findByGroupId(groupId).stream()
-                .filter(m -> m.isAdmin())
-                .map(m -> m.getUser().getId())
-                .collect(Collectors.toList());
+        List<Long> adminIds = new ArrayList<>();
+        try {
+            List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
+            adminIds.addAll(members.stream()
+                    .filter(m -> m.isAdmin())
+                    .map(m -> m.getUser().getId())
+                    .collect(Collectors.toList()));
+        } catch (Exception e) {
+            // 관리자 목록 조회 실패 시 빈 리스트 사용 (이미 빈 리스트로 초기화됨)
+        }
 
+        final List<Long> finalAdminIds = adminIds;
         return messages.stream().map(msg -> {
             Long userId = msg.getUser().getId();
-            boolean isAdmin = userId.equals(ownerId) || adminIds.contains(userId);
+            boolean isAdmin = userId.equals(ownerId) || finalAdminIds.contains(userId);
             
             return GroupChatMessageDTO.builder()
                     .id(msg.getId())

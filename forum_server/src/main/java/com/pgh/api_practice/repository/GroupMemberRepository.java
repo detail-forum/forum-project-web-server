@@ -11,7 +11,8 @@ import java.util.Optional;
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
     Optional<GroupMember> findByGroupIdAndUserId(Long groupId, Long userId);
     boolean existsByGroupIdAndUserId(Long groupId, Long userId);
-    List<GroupMember> findByGroupId(Long groupId);
+    @Query("SELECT gm FROM GroupMember gm WHERE gm.group.id = :groupId")
+    List<GroupMember> findByGroupId(@Param("groupId") Long groupId);
     List<GroupMember> findByUserId(Long userId);
     
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.group.id = :groupId")

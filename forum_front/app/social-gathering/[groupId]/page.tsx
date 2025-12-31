@@ -502,48 +502,59 @@ export default function GroupDetailPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {members.map((member) => (
-                        <tr key={member.userId}>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              {member.profileImageUrl ? (
-                                <img
-                                  src={member.profileImageUrl}
-                                  alt={member.nickname}
-                                  className="w-10 h-10 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold">
-                                  {member.nickname.charAt(0).toUpperCase()}
+                      {members
+                        .sort((a, b) => {
+                          // 주인을 맨 위로
+                          if (a.isOwner && !b.isOwner) return -1
+                          if (!a.isOwner && b.isOwner) return 1
+                          // 관리자를 다음으로
+                          if (a.isAdmin && !b.isAdmin) return -1
+                          if (!a.isAdmin && b.isAdmin) return 1
+                          // 나머지는 이름순
+                          return a.nickname.localeCompare(b.nickname)
+                        })
+                        .map((member) => (
+                          <tr key={member.userId}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                {member.profileImageUrl ? (
+                                  <img
+                                    src={member.profileImageUrl}
+                                    alt={member.nickname}
+                                    className="w-10 h-10 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold">
+                                    {member.nickname.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-medium">{member.nickname}</div>
+                                  <div className="text-sm text-gray-500">@{member.username}</div>
                                 </div>
-                              )}
-                              <div>
-                                <div className="font-medium">{member.nickname}</div>
-                                <div className="text-sm text-gray-500">@{member.username}</div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              {member.isOwner && (
-                                <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
-                                  주인
-                                </span>
-                              )}
-                              {member.isAdmin && (
-                                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                                  관리자
-                                </span>
-                              )}
-                              {!member.isOwner && !member.isAdmin && (
-                                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
-                                  멤버
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
+                                {member.isOwner && (
+                                  <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded font-semibold">
+                                    주인
+                                  </span>
+                                )}
+                                {member.isAdmin && !member.isOwner && (
+                                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                                    관리자
+                                  </span>
+                                )}
+                                {!member.isOwner && !member.isAdmin && (
+                                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
+                                    멤버
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>

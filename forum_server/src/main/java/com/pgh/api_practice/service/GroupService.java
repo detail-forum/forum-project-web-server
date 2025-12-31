@@ -274,9 +274,10 @@ public class GroupService {
                 .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
 
         List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
-        Long ownerId = group.getOwner().getId();
+        Users owner = group.getOwner();
+        Long ownerId = owner.getId();
 
-        return members.stream().map(member -> {
+        List<GroupMemberDTO> memberDTOs = members.stream().map(member -> {
             Users user = member.getUser();
             return GroupMemberDTO.builder()
                     .userId(user.getId())
@@ -287,6 +288,32 @@ public class GroupService {
                     .isOwner(user.getId().equals(ownerId))
                     .build();
         }).collect(Collectors.toList());
+
+        // 모임 주인이 멤버 목록에 없으면 추가 (주인은 항상 관리자)
+        boolean ownerInList = memberDTOs.stream()
+                .anyMatch(m -> m.getUserId().equals(ownerId));
+        
+        if (!ownerInList) {
+            GroupMemberDTO ownerDTO = GroupMemberDTO.builder()
+                    .userId(owner.getId())
+                    .username(owner.getUsername())
+                    .nickname(owner.getNickname())
+                    .profileImageUrl(owner.getProfileImageUrl())
+                    .isAdmin(true) // 주인은 항상 관리자
+                    .isOwner(true)
+                    .build();
+            memberDTOs.add(0, ownerDTO); // 주인을 맨 앞에 추가
+        } else {
+            // 주인이 이미 목록에 있으면 isOwner와 isAdmin을 true로 설정
+            memberDTOs.forEach(m -> {
+                if (m.getUserId().equals(ownerId)) {
+                    m.setOwner(true);
+                    m.setAdmin(true);
+                }
+            });
+        }
+
+        return memberDTOs;
     }
 
     /** 모임 삭제 */

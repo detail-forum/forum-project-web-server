@@ -1,5 +1,6 @@
 package com.pgh.api_practice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 import java.time.LocalDateTime;
 
@@ -18,6 +19,10 @@ public class GroupDetailDTO {
     private long memberCount;
     private LocalDateTime createdTime;
     private LocalDateTime updatedTime;
+    
+    @JsonProperty("isMember")
     private boolean isMember;
+    
+    @JsonProperty("isAdmin")
     private boolean isAdmin;
 }

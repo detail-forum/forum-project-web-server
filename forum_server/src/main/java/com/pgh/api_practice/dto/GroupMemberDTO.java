@@ -1,5 +1,6 @@
 package com.pgh.api_practice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 @Getter
@@ -12,6 +13,10 @@ public class GroupMemberDTO {
     private String username;
     private String nickname;
     private String profileImageUrl;
+    
+    @JsonProperty("isAdmin")
     private boolean isAdmin;
+    
+    @JsonProperty("isOwner")
     private boolean isOwner;
 }

@@ -195,8 +195,18 @@ pipeline {
                     echo Checking backend service status...
                     "%NSSM%" status forum-backend
                     echo.
-                    echo Backend service logs (last 20 lines):
-                    type "%DEPLOY_BACKEND%\\logs\\spring.log" 2>nul | findstr /N "." | findstr /R "[0-9]*:" | more +0 | findstr /R "[0-9]*:" | tail -20 2>nul || echo [INFO] Log file not found or empty
+                    echo Backend service logs (if available):
+                    if exist "%DEPLOY_BACKEND%\\logs\\spring.log" (
+                        powershell "Get-Content '%DEPLOY_BACKEND%\\logs\\spring.log' -Tail 30 -ErrorAction SilentlyContinue"
+                    ) else (
+                        echo [INFO] Log file not found at %DEPLOY_BACKEND%\\logs\\spring.log
+                        echo Checking NSSM log directory...
+                        if exist "C:\\nssm\\logs\\forum-backend" (
+                            echo NSSM log directory exists
+                        ) else (
+                            echo NSSM log directory not found
+                        )
+                    )
 
                     REM Frontend 시작
                     echo Starting frontend service...
@@ -212,7 +222,12 @@ pipeline {
                     ping 127.0.0.1 -n 6 > nul
 
                     echo ===== Service Status Check =====
-                    netstat -ano | findstr :8081 && echo [OK] Backend(8081) is running || echo [WARN] Backend(8081) not started
+                    echo Checking backend service...
+                    "%NSSM%" status forum-backend
+                    netstat -ano | findstr :8081 && echo [OK] Backend(8081) is running || echo [WARN] Backend(8081) not started - Service may be starting...
+                    echo.
+                    echo Checking frontend service...
+                    "%NSSM%" status forum-frontend
                     netstat -ano | findstr :3000 && echo [OK] Frontend(3000) is running || echo [WARN] Frontend(3000) not started
                     
                     REM Frontend가 시작되지 않았으면 로그 확인

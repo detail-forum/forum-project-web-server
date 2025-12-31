@@ -37,6 +37,10 @@ export default function ChatRoomPage() {
   const [editRoomName, setEditRoomName] = useState('')
   const [editRoomDescription, setEditRoomDescription] = useState('')
   const [updatingRoom, setUpdatingRoom] = useState(false)
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false)
+  const [newRoomName, setNewRoomName] = useState('')
+  const [newRoomDescription, setNewRoomDescription] = useState('')
+  const [creatingRoom, setCreatingRoom] = useState(false)
 
   useEffect(() => {
     if (groupId) {
@@ -213,6 +217,43 @@ export default function ChatRoomPage() {
     }
   }
 
+  const handleOpenCreateRoomModal = () => {
+    setNewRoomName('')
+    setNewRoomDescription('')
+    setShowCreateRoomModal(true)
+  }
+
+  const handleCloseCreateRoomModal = () => {
+    setShowCreateRoomModal(false)
+    setNewRoomName('')
+    setNewRoomDescription('')
+  }
+
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim() || newRoomName.length < 2) {
+      alert('채팅방 이름은 2자 이상이어야 합니다.')
+      return
+    }
+
+    try {
+      setCreatingRoom(true)
+      const response = await groupApi.createChatRoom(groupId, {
+        name: newRoomName,
+        description: newRoomDescription || undefined,
+      })
+      if (response.success) {
+        await fetchChatRooms()
+        handleCloseCreateRoomModal()
+        alert('채팅방이 생성되었습니다.')
+      }
+    } catch (error: any) {
+      console.error('채팅방 생성 실패:', error)
+      alert(error.response?.data?.message || '채팅방 생성에 실패했습니다.')
+    } finally {
+      setCreatingRoom(false)
+    }
+  }
+
   const currentRoom = chatRooms.find((room) => room.id === roomId)
 
   if (loading) {
@@ -247,20 +288,7 @@ export default function ChatRoomPage() {
             </div>
             {group?.isAdmin && (
               <button
-                onClick={() => {
-                  const name = prompt('채팅방 이름을 입력하세요:')
-                  if (name && name.length >= 2) {
-                    groupApi
-                      .createChatRoom(groupId, { name, description: '' })
-                      .then(() => {
-                        fetchChatRooms()
-                      })
-                      .catch((error) => {
-                        console.error('채팅방 생성 실패:', error)
-                        alert('채팅방 생성에 실패했습니다.')
-                      })
-                  }
-                }}
+                onClick={handleOpenCreateRoomModal}
                 className="w-full mt-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm transition"
               >
                 + 채팅방 추가
@@ -567,6 +595,60 @@ export default function ChatRoomPage() {
           onCrop={handleImageCrop}
           aspectRatio={1}
         />
+      )}
+
+      {/* 채팅방 생성 모달 */}
+      {showCreateRoomModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold mb-4">새 채팅방 만들기</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  채팅방 이름 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="채팅방 이름을 입력하세요 (2자 이상)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={creatingRoom}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  채팅방 설명 (선택사항)
+                </label>
+                <textarea
+                  value={newRoomDescription}
+                  onChange={(e) => setNewRoomDescription(e.target.value)}
+                  placeholder="채팅방 설명을 입력하세요"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={creatingRoom}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleCreateRoom}
+                disabled={creatingRoom || !newRoomName.trim() || newRoomName.length < 2}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creatingRoom ? '생성 중...' : '생성'}
+              </button>
+              <button
+                onClick={handleCloseCreateRoomModal}
+                disabled={creatingRoom}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded transition disabled:opacity-50"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

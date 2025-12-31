@@ -132,8 +132,11 @@ public class GroupService {
         boolean isAdmin = false;
 
         if (currentUser != null) {
-            // 모임 주인인지 확인
-            boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
+            // 모임 주인인지 확인 (ID와 username 모두 확인)
+            boolean isOwnerById = group.getOwner().getId().equals(currentUser.getId());
+            boolean isOwnerByUsername = group.getOwner().getUsername().equals(currentUser.getUsername());
+            boolean isOwner = isOwnerById || isOwnerByUsername;
+            
             if (isOwner) {
                 isMember = true;
                 isAdmin = true; // 모임 주인은 항상 관리자

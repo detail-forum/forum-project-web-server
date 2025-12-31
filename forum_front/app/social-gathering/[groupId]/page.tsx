@@ -10,6 +10,7 @@ import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { getUsernameFromToken } from '@/utils/jwt'
 
 type TabType = 'intro' | 'posts' | 'chat' | 'manage'
 
@@ -18,6 +19,7 @@ export default function GroupDetailPage() {
   const router = useRouter()
   const groupId = Number(params.groupId)
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
+  const currentUsername = getUsernameFromToken()
   const [activeTab, setActiveTab] = useState<TabType>('intro')
   const [group, setGroup] = useState<GroupDetailDTO | null>(null)
   const [posts, setPosts] = useState<GroupPostListDTO[]>([])
@@ -50,14 +52,39 @@ export default function GroupDetailPage() {
       setEditName(group.name)
       setEditDescription(group.description)
       setEditProfileImageUrl(group.profileImageUrl || '')
+      
+      // 프론트엔드에서도 모임 주인 확인 (백엔드가 제대로 인식하지 못하는 경우 대비)
+      if (currentUsername && group.ownerUsername === currentUsername) {
+        if (!group.isMember || !group.isAdmin) {
+          console.log('Frontend override: Owner detected, setting isMember=true, isAdmin=true')
+          setGroup({
+            ...group,
+            isMember: true,
+            isAdmin: true,
+          })
+        }
+      }
     }
-  }, [group])
+  }, [group, currentUsername])
 
   const fetchGroupDetail = async () => {
     try {
       setLoading(true)
       const response = await groupApi.getGroupDetail(groupId)
       if (response.success && response.data) {
+        console.log('Group detail response:', response.data)
+        console.log('Is Member:', response.data.isMember)
+        console.log('Is Admin:', response.data.isAdmin)
+        console.log('Owner Username:', response.data.ownerUsername)
+        console.log('Current Username:', currentUsername)
+        
+        // 프론트엔드에서도 모임 주인 확인 (백엔드가 제대로 인식하지 못하는 경우 대비)
+        if (currentUsername && response.data.ownerUsername === currentUsername) {
+          response.data.isMember = true
+          response.data.isAdmin = true
+          console.log('Frontend override: Set isMember=true, isAdmin=true (owner detected)')
+        }
+        
         setGroup(response.data)
       }
     } catch (error) {

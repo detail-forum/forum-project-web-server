@@ -30,8 +30,10 @@ public class WebSocketChatController {
             @Payload Map<String, String> payload,
             Principal principal) {
         
-        log.info("메시지 수신 시도: groupId={}, roomId={}, username={}, payload={}", 
+        log.info("========== 메시지 수신 시도 ==========");
+        log.info("groupId={}, roomId={}, username={}, payload={}", 
                 groupId, roomId, principal != null ? principal.getName() : "null", payload);
+        log.info("Principal 객체: {}", principal);
         
         try {
             if (principal == null) {
@@ -48,8 +50,8 @@ public class WebSocketChatController {
             log.info("메시지 저장 시작: groupId={}, roomId={}, username={}, message={}", 
                     groupId, roomId, principal.getName(), message);
             
-            // 메시지 저장 및 DTO 생성
-            GroupChatMessageDTO messageDTO = chatService.saveAndGetMessage(groupId, roomId, message);
+            // 메시지 저장 및 DTO 생성 (Principal의 username 전달)
+            GroupChatMessageDTO messageDTO = chatService.saveAndGetMessage(groupId, roomId, message, principal.getName());
             
             log.info("메시지 저장 완료: messageId={}, username={}", messageDTO.getId(), messageDTO.getUsername());
             

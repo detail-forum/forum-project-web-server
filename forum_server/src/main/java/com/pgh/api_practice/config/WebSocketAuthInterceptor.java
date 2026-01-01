@@ -62,9 +62,18 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             // 메시지 전송 시 Principal 확인
             Principal principal = accessor.getUser();
             if (principal == null) {
-                log.warn("메시지 전송 시 Principal이 null입니다. destination={}", accessor.getDestination());
+                log.error("메시지 전송 시 Principal이 null입니다. destination={}, headers={}", 
+                        accessor.getDestination(), accessor.toMap());
             } else {
-                log.debug("메시지 전송: username={}, destination={}", principal.getName(), accessor.getDestination());
+                log.info("메시지 전송: username={}, destination={}", principal.getName(), accessor.getDestination());
+            }
+        } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+            // 구독 시 Principal 확인
+            Principal principal = accessor.getUser();
+            if (principal == null) {
+                log.warn("구독 시 Principal이 null입니다. destination={}", accessor.getDestination());
+            } else {
+                log.info("구독: username={}, destination={}", principal.getName(), accessor.getDestination());
             }
         }
         

@@ -14,7 +14,6 @@ import com.pgh.api_practice.repository.MessageReadRepository;
 import com.pgh.api_practice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,25 +33,22 @@ public class WebSocketChatService {
     private final MessageReadRepository readRepository;
     private final UserRepository userRepository;
 
-    /** 현재 사용자 가져오기 */
-    private Users getCurrentUser() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
-            return null;
-        }
-        return userRepository.findByUsername(authentication.getName()).orElse(null);
-    }
-
     /** 메시지 저장 및 DTO 반환 */
     @Transactional
-    public GroupChatMessageDTO saveAndGetMessage(Long groupId, Long roomId, String messageText) {
-        log.info("saveAndGetMessage 시작: groupId={}, roomId={}, messageText={}", groupId, roomId, messageText);
+    public GroupChatMessageDTO saveAndGetMessage(Long groupId, Long roomId, String messageText, String username) {
+        log.info("saveAndGetMessage 시작: groupId={}, roomId={}, messageText={}, username={}", 
+                groupId, roomId, messageText, username);
         
-        Users currentUser = getCurrentUser();
-        if (currentUser == null) {
-            log.error("현재 사용자를 찾을 수 없습니다.");
+        if (username == null || username.isEmpty()) {
+            log.error("username이 null이거나 비어있습니다.");
             throw new ApplicationUnauthorizedException("인증이 필요합니다.");
         }
+        
+        Users currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.error("사용자를 찾을 수 없습니다: username={}", username);
+                    return new ResourceNotFoundException("사용자를 찾을 수 없습니다.");
+                });
         
         log.info("현재 사용자: username={}, id={}", currentUser.getUsername(), currentUser.getId());
 

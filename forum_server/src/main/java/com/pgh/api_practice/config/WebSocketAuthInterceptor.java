@@ -28,7 +28,11 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         
-        if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+        if (accessor == null) {
+            return message;
+        }
+        
+        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             // Authorization 헤더에서 토큰 추출
             String authToken = accessor.getFirstNativeHeader("Authorization");
             
@@ -49,10 +53,18 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                         log.warn("WebSocket 연결 인증 실패: 유효하지 않은 토큰");
                     }
                 } catch (Exception e) {
-                    log.error("WebSocket 연결 인증 오류: {}", e.getMessage());
+                    log.error("WebSocket 연결 인증 오류: {}", e.getMessage(), e);
                 }
             } else {
                 log.warn("WebSocket 연결 인증 실패: 토큰이 없음");
+            }
+        } else if (StompCommand.SEND.equals(accessor.getCommand())) {
+            // 메시지 전송 시 Principal 확인
+            Principal principal = accessor.getUser();
+            if (principal == null) {
+                log.warn("메시지 전송 시 Principal이 null입니다. destination={}", accessor.getDestination());
+            } else {
+                log.debug("메시지 전송: username={}, destination={}", principal.getName(), accessor.getDestination());
             }
         }
         

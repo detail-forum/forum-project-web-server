@@ -30,32 +30,50 @@ public class WebSocketChatController {
             @Payload Map<String, String> payload,
             Principal principal) {
         
+        log.info("메시지 수신 시도: groupId={}, roomId={}, username={}, payload={}", 
+                groupId, roomId, principal != null ? principal.getName() : "null", payload);
+        
         try {
+            if (principal == null) {
+                log.error("Principal이 null입니다. 인증이 필요합니다.");
+                return;
+            }
+            
             String message = payload.get("message");
             if (message == null || message.trim().isEmpty()) {
+                log.warn("메시지가 비어있습니다.");
                 return;
             }
 
+            log.info("메시지 저장 시작: groupId={}, roomId={}, username={}, message={}", 
+                    groupId, roomId, principal.getName(), message);
+            
             // 메시지 저장 및 DTO 생성
             GroupChatMessageDTO messageDTO = chatService.saveAndGetMessage(groupId, roomId, message);
             
-            // 해당 채팅방의 모든 구독자에게 메시지 전송
-            messagingTemplate.convertAndSend(
-                "/topic/chat/" + groupId + "/" + roomId, 
-                messageDTO
-            );
+            log.info("메시지 저장 완료: messageId={}, username={}", messageDTO.getId(), messageDTO.getUsername());
             
-            log.info("메시지 전송: groupId={}, roomId={}, username={}", groupId, roomId, principal.getName());
+            String topic = "/topic/chat/" + groupId + "/" + roomId;
+            log.info("메시지 브로드캐스트 시작: topic={}, messageDTO={}", topic, messageDTO);
+            
+            // 해당 채팅방의 모든 구독자에게 메시지 전송
+            messagingTemplate.convertAndSend(topic, messageDTO);
+            
+            log.info("메시지 브로드캐스트 완료: groupId={}, roomId={}, username={}", 
+                    groupId, roomId, principal.getName());
         } catch (Exception e) {
-            log.error("메시지 전송 오류: {}", e.getMessage(), e);
+            log.error("메시지 전송 오류: groupId={}, roomId={}, username={}, error={}", 
+                    groupId, roomId, principal != null ? principal.getName() : "null", e.getMessage(), e);
             // 오류 발생 시 클라이언트에 알림
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", true);
-            error.put("message", "메시지 전송에 실패했습니다.");
-            messagingTemplate.convertAndSend(
-                "/user/" + principal.getName() + "/queue/errors",
-                error
-            );
+            if (principal != null) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", true);
+                error.put("message", "메시지 전송에 실패했습니다: " + e.getMessage());
+                messagingTemplate.convertAndSend(
+                    "/user/" + principal.getName() + "/queue/errors",
+                    error
+                );
+            }
         }
     }
 

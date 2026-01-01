@@ -46,23 +46,41 @@ public class WebSocketChatService {
     /** 메시지 저장 및 DTO 반환 */
     @Transactional
     public GroupChatMessageDTO saveAndGetMessage(Long groupId, Long roomId, String messageText) {
+        log.info("saveAndGetMessage 시작: groupId={}, roomId={}, messageText={}", groupId, roomId, messageText);
+        
         Users currentUser = getCurrentUser();
         if (currentUser == null) {
+            log.error("현재 사용자를 찾을 수 없습니다.");
             throw new ApplicationUnauthorizedException("인증이 필요합니다.");
         }
+        
+        log.info("현재 사용자: username={}, id={}", currentUser.getUsername(), currentUser.getId());
 
         GroupChatRoom room = roomRepository.findByIdAndIsDeletedFalse(roomId)
-                .orElseThrow(() -> new ResourceNotFoundException("채팅방을 찾을 수 없습니다."));
+                .orElseThrow(() -> {
+                    log.error("채팅방을 찾을 수 없습니다: roomId={}", roomId);
+                    return new ResourceNotFoundException("채팅방을 찾을 수 없습니다.");
+                });
+        
+        log.info("채팅방 조회 완료: roomId={}, name={}, isAdminRoom={}", roomId, room.getName(), room.isAdminRoom());
 
         // 모임 멤버인지 확인
-        if (!groupMemberRepository.existsByGroupIdAndUserId(groupId, currentUser.getId())) {
+        boolean isMember = groupMemberRepository.existsByGroupIdAndUserId(groupId, currentUser.getId());
+        log.info("모임 멤버 확인: groupId={}, userId={}, isMember={}", groupId, currentUser.getId(), isMember);
+        
+        if (!isMember) {
+            log.error("모임 멤버가 아닙니다: groupId={}, userId={}", groupId, currentUser.getId());
             throw new ApplicationUnauthorizedException("모임 멤버만 메시지를 전송할 수 있습니다.");
         }
 
         // 관리자방은 관리자만 접근 가능
         if (room.isAdminRoom()) {
             Optional<com.pgh.api_practice.entity.GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-            if (member.isEmpty() || !member.get().isAdmin()) {
+            boolean isAdmin = member.isPresent() && member.get().isAdmin();
+            log.info("관리자방 접근 확인: isAdminRoom={}, isAdmin={}", room.isAdminRoom(), isAdmin);
+            
+            if (!isAdmin) {
+                log.error("관리자가 아닙니다: groupId={}, userId={}", groupId, currentUser.getId());
                 throw new ApplicationUnauthorizedException("관리자만 관리자방에 메시지를 전송할 수 있습니다.");
             }
         }
@@ -74,8 +92,14 @@ public class WebSocketChatService {
                 .readCount(0)
                 .build();
 
+        log.info("메시지 저장 시작: message={}", message);
         GroupChatMessage saved = messageRepository.save(message);
-        return convertToDTO(saved, groupId);
+        log.info("메시지 저장 완료: messageId={}", saved.getId());
+        
+        GroupChatMessageDTO dto = convertToDTO(saved, groupId);
+        log.info("DTO 변환 완료: messageId={}, username={}, nickname={}", dto.getId(), dto.getUsername(), dto.getNickname());
+        
+        return dto;
     }
 
     /** 메시지 읽음 처리 */

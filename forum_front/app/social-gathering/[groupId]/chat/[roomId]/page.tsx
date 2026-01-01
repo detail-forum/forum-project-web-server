@@ -72,15 +72,19 @@ export default function ChatRoomPage() {
     roomId,
     enabled: isAuthenticated && !!groupId && !!roomId,
     onMessage: useCallback((message: GroupChatMessageDTO) => {
+      console.log('onMessage 콜백 호출:', message)
       setMessages(prev => {
         // 중복 방지
         if (prev.some(m => m.id === message.id)) {
+          console.log('중복 메시지 무시:', message.id)
           return prev
         }
+        console.log('새 메시지 추가:', message.id, message.message)
         // 시간순으로 정렬
         const newMessages = [...prev, message].sort((a, b) => 
           new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
         )
+        console.log('메시지 목록 업데이트 완료, 총 메시지 수:', newMessages.length)
         // 새 메시지가 추가되면 스크롤 위치 확인 후 자동 스크롤
         setTimeout(() => {
           if (messagesContainerRef.current) {
@@ -192,12 +196,41 @@ export default function ChatRoomPage() {
       return
     }
 
-    if (!newMessage.trim() || !isConnected) return
+    if (!newMessage.trim()) {
+      console.warn('메시지가 비어있습니다.')
+      return
+    }
+
+    if (!isConnected) {
+      console.warn('WebSocket이 연결되지 않았습니다. REST API로 전송합니다.')
+      // WebSocket 연결 실패 시 REST API로 폴백
+      try {
+        setSending(true)
+        const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
+        if (response.success) {
+          setNewMessage('')
+          // REST API로 전송한 경우 메시지 목록 새로고침
+          setTimeout(() => {
+            fetchMessages()
+          }, 500)
+        }
+      } catch (error: any) {
+        console.error('메시지 전송 실패:', error)
+        alert(error.response?.data?.message || '메시지 전송에 실패했습니다.')
+      } finally {
+        setSending(false)
+      }
+      return
+    }
 
     try {
       setSending(true)
+      console.log('메시지 전송 시도:', { groupId, roomId, message: newMessage, isConnected })
       const success = wsSendMessage(newMessage)
+      console.log('메시지 전송 결과:', success)
+      
       if (success) {
+        console.log('WebSocket으로 메시지 전송 성공')
         setNewMessage('')
         stopTyping()
         if (typingTimeoutRef.current) {
@@ -205,6 +238,7 @@ export default function ChatRoomPage() {
           typingTimeoutRef.current = null
         }
       } else {
+        console.warn('WebSocket 전송 실패, REST API로 폴백')
         // WebSocket 연결 실패 시 REST API로 폴백
         const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
         if (response.success) {

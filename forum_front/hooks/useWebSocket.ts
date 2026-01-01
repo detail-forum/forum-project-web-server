@@ -71,17 +71,20 @@ export function useWebSocket({
         if (!clientRef.current) return
 
         // 채팅방 메시지 구독
-        clientRef.current.subscribe(
+        const subscription = clientRef.current.subscribe(
           `/topic/chat/${groupId}/${roomId}`,
           (message: IMessage) => {
             try {
+              console.log('메시지 수신:', message.body)
               const data = JSON.parse(message.body)
+              console.log('파싱된 메시지 데이터:', data)
               onMessage?.(data)
             } catch (error) {
-              console.error('메시지 파싱 오류:', error)
+              console.error('메시지 파싱 오류:', error, message.body)
             }
           }
         )
+        console.log('메시지 구독 완료:', `/topic/chat/${groupId}/${roomId}`)
 
         // 타이핑 인디케이터 구독
         clientRef.current.subscribe(
@@ -172,14 +175,31 @@ export function useWebSocket({
   }, [groupId, roomId, onMessage, onTyping, onRead, enabled, getToken])
 
   const sendMessage = useCallback((message: string) => {
-    if (clientRef.current && clientRef.current.connected) {
-      clientRef.current.publish({
-        destination: `/app/chat/${groupId}/${roomId}/send`,
-        body: JSON.stringify({ message }),
-      })
-      return true
+    if (!clientRef.current) {
+      console.error('WebSocket 클라이언트가 없습니다.')
+      return false
     }
-    return false
+    
+    if (!clientRef.current.connected) {
+      console.error('WebSocket이 연결되지 않았습니다.')
+      return false
+    }
+    
+    try {
+      const destination = `/app/chat/${groupId}/${roomId}/send`
+      const body = JSON.stringify({ message })
+      console.log('메시지 전송:', { destination, body, connected: clientRef.current.connected })
+      
+      clientRef.current.publish({
+        destination,
+        body,
+      })
+      console.log('메시지 전송 완료')
+      return true
+    } catch (error) {
+      console.error('메시지 전송 중 오류:', error)
+      return false
+    }
   }, [groupId, roomId])
 
   const startTyping = useCallback(() => {

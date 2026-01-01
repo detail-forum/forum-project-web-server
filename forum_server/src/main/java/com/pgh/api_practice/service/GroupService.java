@@ -95,9 +95,39 @@ public class GroupService {
 
     /** 모임 목록 조회 */
     @Transactional(readOnly = true)
-    public Page<GroupListDTO> getGroupList(Pageable pageable) {
-        Page<Group> groups = groupRepository.findByIsDeletedFalseOrderByCreatedTimeDesc(pageable);
+    public Page<GroupListDTO> getGroupList(Pageable pageable, Boolean myGroups) {
         Users currentUser = getCurrentUser();
+        Page<Group> groups;
+        
+        // 내 모임만 필터링하는 경우
+        if (myGroups != null && myGroups && currentUser != null) {
+            // 현재 사용자가 주인인 모임 조회
+            List<Group> ownedGroups = groupRepository.findByOwnerIdAndIsDeletedFalseOrderByCreatedTimeDesc(currentUser.getId());
+            
+            // 현재 사용자가 멤버인 모임 조회
+            List<GroupMember> memberships = groupMemberRepository.findByUserId(currentUser.getId());
+            List<Long> memberGroupIds = memberships.stream()
+                    .map(gm -> gm.getGroup().getId())
+                    .collect(Collectors.toList());
+            
+            // 주인인 모임과 멤버인 모임 합치기
+            List<Long> allGroupIds = new ArrayList<>();
+            allGroupIds.addAll(ownedGroups.stream().map(Group::getId).collect(Collectors.toList()));
+            allGroupIds.addAll(memberGroupIds);
+            
+            if (allGroupIds.isEmpty()) {
+                return new PageImpl<>(new ArrayList<>(), pageable, 0);
+            }
+            
+            // 중복 제거
+            allGroupIds = allGroupIds.stream().distinct().collect(Collectors.toList());
+            
+            // 해당 모임들만 조회 (페이지네이션 적용)
+            groups = groupRepository.findByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(allGroupIds, pageable);
+        } else {
+            // 전체 모임 조회
+            groups = groupRepository.findByIsDeletedFalseOrderByCreatedTimeDesc(pageable);
+        }
 
         List<GroupListDTO> groupList = groups.getContent().stream().map(group -> {
             long memberCount = groupMemberRepository.countByGroupId(group.getId());
@@ -105,10 +135,17 @@ public class GroupService {
             boolean isAdmin = false;
 
             if (currentUser != null) {
-                Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(group.getId(), currentUser.getId());
-                if (member.isPresent()) {
+                // 모임 주인인지 확인
+                boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
+                if (isOwner) {
                     isMember = true;
-                    isAdmin = member.get().isAdmin();
+                    isAdmin = true;
+                } else {
+                    Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(group.getId(), currentUser.getId());
+                    if (member.isPresent()) {
+                        isMember = true;
+                        isAdmin = member.get().isAdmin();
+                    }
                 }
             }
 

@@ -29,8 +29,11 @@ public class GroupController {
 
     /** 모임 목록 조회 */
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<GroupListDTO>>> getGroupList(Pageable pageable) {
-        Page<GroupListDTO> list = groupService.getGroupList(pageable);
+    public ResponseEntity<ApiResponse<Page<GroupListDTO>>> getGroupList(
+            Pageable pageable,
+            @RequestParam(required = false) Boolean myGroups
+    ) {
+        Page<GroupListDTO> list = groupService.getGroupList(pageable, myGroups);
         return ResponseEntity.ok(ApiResponse.ok(list, "모임 목록 조회 성공"));
     }
 

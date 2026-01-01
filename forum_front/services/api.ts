@@ -371,9 +371,13 @@ export const groupApi = {
     return response.data
   },
 
-  getGroupList: async (page: number = 0, size: number = 10): Promise<ApiResponse<any>> => {
+  getGroupList: async (page: number = 0, size: number = 10, myGroups?: boolean): Promise<ApiResponse<any>> => {
+    const params: any = { page, size }
+    if (myGroups !== undefined) {
+      params.myGroups = myGroups
+    }
     const response = await apiClient.get<ApiResponse<any>>('/group', {
-      params: { page, size },
+      params,
     })
     return response.data
   },

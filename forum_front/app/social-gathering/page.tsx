@@ -2,25 +2,29 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSelector } from 'react-redux'
+import type { RootState } from '@/store/store'
 import Header from '@/components/Header'
 import { groupApi } from '@/services/api'
 import type { GroupListDTO } from '@/types/api'
 
 export default function SocialGatheringPage() {
   const router = useRouter()
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const [groups, setGroups] = useState<GroupListDTO[]>([])
   const [filteredGroups, setFilteredGroups] = useState<GroupListDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showMyGroups, setShowMyGroups] = useState(false)
 
   useEffect(() => {
     fetchGroups()
-  }, [])
+  }, [showMyGroups])
 
   const fetchGroups = async () => {
     try {
       setLoading(true)
-      const response = await groupApi.getGroupList(0, 100)
+      const response = await groupApi.getGroupList(0, 100, showMyGroups && isAuthenticated ? true : undefined)
       if (response.success && response.data) {
         // Page 객체에서 content 추출
         const content = response.data.content || response.data
@@ -46,6 +50,11 @@ export default function SocialGatheringPage() {
       setFilteredGroups(filtered)
     }
   }, [searchQuery, groups])
+  
+  const handleMyGroupsToggle = () => {
+    setShowMyGroups(!showMyGroups)
+    setSearchQuery('') // 필터 변경 시 검색어 초기화
+  }
 
   const handleGroupClick = (groupId: number) => {
     router.push(`/social-gathering/${groupId}`)
@@ -75,7 +84,21 @@ export default function SocialGatheringPage() {
           </div>
           
           {/* 검색 및 필터링 */}
-          <div className="mb-6">
+          <div className="mb-6 space-y-4">
+            <div className="flex items-center gap-4">
+              {isAuthenticated && (
+                <button
+                  onClick={handleMyGroupsToggle}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    showMyGroups
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  내 모임 보기
+                </button>
+              )}
+            </div>
             <input
               type="text"
               value={searchQuery}

@@ -12,6 +12,7 @@ import CommentList from '@/components/CommentList'
 import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { getUsernameFromToken } from '@/utils/jwt'
 
 export default function GroupPostDetailPage() {
   const params = useParams()

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
@@ -12,6 +12,7 @@ import ImageCropModal from '@/components/ImageCropModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
+import { useWebSocket } from '@/hooks/useWebSocket'
 
 export default function ChatRoomPage() {
   const params = useParams()
@@ -30,8 +31,8 @@ export default function ChatRoomPage() {
   const [selectedImage, setSelectedImage] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
   const currentUsername = getUsernameFromToken()
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const profileImageInputRef = useRef<HTMLInputElement>(null)
   const [editingRoom, setEditingRoom] = useState(false)
   const [editRoomName, setEditRoomName] = useState('')
@@ -53,18 +54,48 @@ export default function ChatRoomPage() {
     }
   }, [groupId])
 
+  // WebSocket 연결
+  const {
+    isConnected,
+    sendMessage: wsSendMessage,
+    startTyping,
+    stopTyping,
+    markAsRead,
+    typingUsers,
+  } = useWebSocket({
+    groupId,
+    roomId,
+    enabled: isAuthenticated && !!groupId && !!roomId,
+    onMessage: useCallback((message: GroupChatMessageDTO) => {
+      setMessages(prev => {
+        // 중복 방지
+        if (prev.some(m => m.id === message.id)) {
+          return prev
+        }
+        // 시간순으로 정렬
+        const newMessages = [...prev, message].sort((a, b) => 
+          new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
+        )
+        return newMessages
+      })
+    }, []),
+    onTyping: useCallback((data: { username: string; isTyping: boolean }) => {
+      // 타이핑 상태는 훅에서 자동 관리됨
+    }, []),
+    onRead: useCallback((data: { messageId: number; username: string; readCount: number }) => {
+      // 읽음 수 업데이트
+      setMessages(prev => prev.map(msg => 
+        msg.id === data.messageId 
+          ? { ...msg, readCount: data.readCount }
+          : msg
+      ))
+    }, []),
+  })
+
+  // 초기 메시지 로드
   useEffect(() => {
     if (groupId && roomId) {
       fetchMessages()
-      // 폴링으로 메시지 새로고침 (5초마다)
-      const interval = setInterval(() => {
-        fetchMessages()
-      }, 5000)
-      setPollingInterval(interval)
-
-      return () => {
-        if (interval) clearInterval(interval)
-      }
     }
   }, [groupId, roomId])
 
@@ -125,17 +156,28 @@ export default function ChatRoomPage() {
       return
     }
 
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() || !isConnected) return
 
     try {
       setSending(true)
-      const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
-      if (response.success) {
+      const success = wsSendMessage(newMessage)
+      if (success) {
         setNewMessage('')
-        // 메시지 전송 후 즉시 새로고침
-        setTimeout(() => {
-          fetchMessages()
-        }, 500)
+        stopTyping()
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current)
+          typingTimeoutRef.current = null
+        }
+      } else {
+        // WebSocket 연결 실패 시 REST API로 폴백
+        const response = await groupApi.sendChatMessage(groupId, roomId, { message: newMessage })
+        if (response.success) {
+          setNewMessage('')
+          // REST API로 전송한 경우 메시지 목록 새로고침
+          setTimeout(() => {
+            fetchMessages()
+          }, 500)
+        }
       }
     } catch (error: any) {
       console.error('메시지 전송 실패:', error)
@@ -144,6 +186,37 @@ export default function ChatRoomPage() {
       setSending(false)
     }
   }
+
+  // 타이핑 인디케이터 처리
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setNewMessage(value)
+    
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    
+    if (value.trim() && isConnected) {
+      startTyping()
+      // 3초 후 자동으로 타이핑 종료
+      typingTimeoutRef.current = setTimeout(() => {
+        stopTyping()
+      }, 3000)
+    } else {
+      stopTyping()
+    }
+  }
+
+  // 메시지 표시 시 읽음 처리
+  useEffect(() => {
+    if (messages.length > 0 && isConnected && currentUsername) {
+      const lastMessage = messages[messages.length - 1]
+      // 본인이 보낸 메시지가 아니고, 아직 읽지 않은 경우
+      if (lastMessage.username !== currentUsername && lastMessage.readCount !== undefined) {
+        markAsRead(lastMessage.id)
+      }
+    }
+  }, [messages, isConnected, currentUsername, markAsRead])
 
   const handleChatRoomClick = (selectedRoomId: number) => {
     router.push(`/social-gathering/${groupId}/chat/${selectedRoomId}`)
@@ -552,7 +625,8 @@ export default function ChatRoomPage() {
                     </div>
                   </div>
                 ) : (
-                  messages.map((message) => {
+                  <>
+                    {messages.map((message) => {
                     const isMyMessage = currentUsername === message.username
                     return (
                       <div
@@ -604,11 +678,33 @@ export default function ChatRoomPage() {
                             <p className="text-sm whitespace-pre-wrap break-words">
                               {message.message}
                             </p>
+                            {/* 읽음 표시 */}
+                            {message.readCount !== undefined && message.readCount > 0 && (
+                              <span className={`text-xs mt-1 block ${isMyMessage ? 'text-blue-200' : 'text-gray-400'}`}>
+                                읽음 {message.readCount}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     )
-                  })
+                  })}
+                  {/* 타이핑 인디케이터 */}
+                  {typingUsers.length > 0 && (
+                    <div className="px-4 py-2 text-sm text-gray-500 italic">
+                      {typingUsers.length === 1 
+                        ? `${typingUsers[0]}님이 입력 중...`
+                        : `${typingUsers.length}명이 입력 중...`
+                      }
+                    </div>
+                  )}
+                  {/* 연결 상태 표시 */}
+                  {!isConnected && (
+                    <div className="px-4 py-2 text-xs text-yellow-600 bg-yellow-50 rounded">
+                      연결 중... 메시지가 지연될 수 있습니다.
+                    </div>
+                  )}
+                </>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -619,10 +715,10 @@ export default function ChatRoomPage() {
                   <input
                     type="text"
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={handleInputChange}
                     placeholder="메시지를 입력하세요..."
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={sending || !isAuthenticated}
+                    disabled={sending || !isAuthenticated || !isConnected}
                   />
                   <button
                     type="submit"

@@ -20,4 +20,5 @@ public class GroupChatMessageDTO {
     private boolean isAdmin;
     
     private LocalDateTime createdTime;
+    private int readCount;
 }

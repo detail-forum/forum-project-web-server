@@ -250,6 +250,7 @@ export interface GroupChatMessageDTO {
   profileImageUrl?: string
   isAdmin: boolean
   createdTime: string
+  readCount?: number
 }
 
 export interface CreateGroupChatMessageDTO {

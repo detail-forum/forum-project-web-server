@@ -651,6 +651,7 @@ public class GroupService {
                     .profileImageUrl(msg.getUser().getProfileImageUrl())
                     .isAdmin(isAdmin)
                     .createdTime(msg.getCreatedTime())
+                    .readCount(msg.getReadCount())
                     .build();
         }).collect(Collectors.toList());
     }

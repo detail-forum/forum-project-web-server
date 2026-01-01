@@ -31,9 +31,14 @@ export default function ChatRoomPage() {
   const [selectedImage, setSelectedImage] = useState<string>('')
   const [uploadingProfile, setUploadingProfile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const currentUsername = getUsernameFromToken()
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const profileImageInputRef = useRef<HTMLInputElement>(null)
+  const [isScrolledToBottom, setIsScrolledToBottom] = useState(true)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: number } | null>(null)
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
+  const [editMessageText, setEditMessageText] = useState('')
   const [editingRoom, setEditingRoom] = useState(false)
   const [editRoomName, setEditRoomName] = useState('')
   const [editRoomDescription, setEditRoomDescription] = useState('')
@@ -76,6 +81,16 @@ export default function ChatRoomPage() {
         const newMessages = [...prev, message].sort((a, b) => 
           new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
         )
+        // 새 메시지가 추가되면 스크롤 위치 확인 후 자동 스크롤
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+            const isAtBottom = scrollHeight - scrollTop - clientHeight < 100
+            if (isAtBottom) {
+              scrollToBottom()
+            }
+          }
+        }, 100)
         return newMessages
       })
     }, []),
@@ -123,9 +138,30 @@ export default function ChatRoomPage() {
     }
   }
 
+  // 스크롤 위치 확인
+  const checkScrollPosition = useCallback(() => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100 // 100px 여유
+      setIsScrolledToBottom(isAtBottom)
+    }
+  }, [])
+
+  // 스크롤 이벤트 리스너
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+    const container = messagesContainerRef.current
+    if (container) {
+      container.addEventListener('scroll', checkScrollPosition)
+      return () => container.removeEventListener('scroll', checkScrollPosition)
+    }
+  }, [checkScrollPosition])
+
+  // 메시지가 추가될 때 스크롤 처리
+  useEffect(() => {
+    if (isScrolledToBottom) {
+      scrollToBottom()
+    }
+  }, [messages, isScrolledToBottom])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -217,6 +253,92 @@ export default function ChatRoomPage() {
       }
     }
   }, [messages, isConnected, currentUsername, markAsRead])
+
+  // 메시지 우클릭 핸들러
+  const handleMessageContextMenu = (e: React.MouseEvent, messageId: number) => {
+    e.preventDefault()
+    const message = messages.find(m => m.id === messageId)
+    if (!message || message.username !== currentUsername) return // 본인 메시지만
+    
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      messageId,
+    })
+  }
+
+  // 컨텍스트 메뉴 닫기
+  const closeContextMenu = () => {
+    setContextMenu(null)
+  }
+
+  // 컨텍스트 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    if (contextMenu) {
+      const handleClick = () => closeContextMenu()
+      window.addEventListener('click', handleClick)
+      return () => window.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu])
+
+  // 메시지 삭제
+  const handleDeleteMessage = async (messageId: number) => {
+    if (!confirm('정말로 이 메시지를 삭제하시겠습니까?')) return
+    
+    try {
+      // TODO: 메시지 삭제 API 호출
+      // await groupApi.deleteChatMessage(groupId, roomId, messageId)
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+      closeContextMenu()
+    } catch (error) {
+      console.error('메시지 삭제 실패:', error)
+      alert('메시지 삭제에 실패했습니다.')
+    }
+  }
+
+  // 메시지 수정 시작
+  const handleStartEditMessage = (messageId: number) => {
+    const message = messages.find(m => m.id === messageId)
+    if (message) {
+      setEditingMessageId(messageId)
+      setEditMessageText(message.message)
+      closeContextMenu()
+    }
+  }
+
+  // 메시지 수정 취소
+  const handleCancelEditMessage = () => {
+    setEditingMessageId(null)
+    setEditMessageText('')
+  }
+
+  // 메시지 수정 저장
+  const handleSaveEditMessage = async (messageId: number) => {
+    if (!editMessageText.trim()) return
+    
+    try {
+      // TODO: 메시지 수정 API 호출
+      // await groupApi.updateChatMessage(groupId, roomId, messageId, { message: editMessageText })
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, message: editMessageText } : m
+      ))
+      setEditingMessageId(null)
+      setEditMessageText('')
+    } catch (error) {
+      console.error('메시지 수정 실패:', error)
+      alert('메시지 수정에 실패했습니다.')
+    }
+  }
+
+  // 답글 기능 (향후 구현)
+  const handleReplyMessage = (messageId: number) => {
+    const message = messages.find(m => m.id === messageId)
+    if (message) {
+      // 답글 기능은 향후 구현
+      setNewMessage(`@${message.nickname} `)
+      closeContextMenu()
+    }
+  }
 
   const handleChatRoomClick = (selectedRoomId: number) => {
     router.push(`/social-gathering/${groupId}/chat/${selectedRoomId}`)
@@ -616,7 +738,10 @@ export default function ChatRoomPage() {
               </div>
 
               {/* 메시지 영역 */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+              <div 
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 relative"
+              >
                 {messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-gray-500">
@@ -626,12 +751,16 @@ export default function ChatRoomPage() {
                   </div>
                 ) : (
                   <>
-                    {messages.map((message) => {
+                    {messages.map((message, index) => {
                     const isMyMessage = currentUsername === message.username
+                    const isNewMessage = index === messages.length - 1
                     return (
                       <div
                         key={message.id}
-                        className={`flex gap-3 ${isMyMessage ? 'flex-row-reverse' : ''}`}
+                        className={`flex gap-3 ${isMyMessage ? 'flex-row-reverse' : ''} ${
+                          isNewMessage ? 'animate-slide-in' : ''
+                        }`}
+                        onContextMenu={(e) => handleMessageContextMenu(e, message.id)}
                       >
                         <div className="flex-shrink-0">
                           {message.profileImageUrl ? (
@@ -668,36 +797,78 @@ export default function ChatRoomPage() {
                               {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}
                             </span>
                           </div>
-                          <div
-                            className={`rounded-lg px-4 py-2 inline-block max-w-md ${
-                              isMyMessage
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-white text-gray-900 border border-gray-200'
-                            }`}
-                          >
-                            <p className="text-sm whitespace-pre-wrap break-words">
-                              {message.message}
-                            </p>
-                            {/* 읽음 표시 */}
-                            {message.readCount !== undefined && message.readCount > 0 && (
-                              <span className={`text-xs mt-1 block ${isMyMessage ? 'text-blue-200' : 'text-gray-400'}`}>
-                                읽음 {message.readCount}
-                              </span>
+                          <div className="flex items-end gap-2">
+                            {editingMessageId === message.id ? (
+                              <div className="flex-1">
+                                <input
+                                  type="text"
+                                  value={editMessageText}
+                                  onChange={(e) => setEditMessageText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault()
+                                      handleSaveEditMessage(message.id)
+                                    } else if (e.key === 'Escape') {
+                                      handleCancelEditMessage()
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={() => handleSaveEditMessage(message.id)}
+                                    className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                                  >
+                                    저장
+                                  </button>
+                                  <button
+                                    onClick={handleCancelEditMessage}
+                                    className="px-3 py-1 bg-gray-200 text-gray-800 rounded text-xs hover:bg-gray-300"
+                                  >
+                                    취소
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div
+                                  className={`rounded-lg px-4 py-2 inline-block max-w-md relative ${
+                                    isMyMessage
+                                      ? 'bg-blue-500 text-white'
+                                      : 'bg-white text-gray-900 border border-gray-200'
+                                  }`}
+                                >
+                                  <p className="text-sm whitespace-pre-wrap break-words">
+                                    {message.message}
+                                  </p>
+                                </div>
+                                {/* 읽음 표시 - 메시지 박스 옆에 표시 */}
+                                {isMyMessage && message.readCount !== undefined && message.readCount > 0 && (
+                                  <span className="text-xs text-gray-400 mb-1">
+                                    읽음 {message.readCount}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
                       </div>
                     )
                   })}
-                  {/* 타이핑 인디케이터 */}
-                  {typingUsers.length > 0 && (
-                    <div className="px-4 py-2 text-sm text-gray-500 italic">
-                      {typingUsers.length === 1 
-                        ? `${typingUsers[0]}님이 입력 중...`
-                        : `${typingUsers.length}명이 입력 중...`
-                      }
-                    </div>
-                  )}
+                  {/* 타이핑 인디케이터 영역 - 항상 표시 */}
+                  <div className="px-4 py-2 min-h-[40px] flex items-center">
+                    {typingUsers.length > 0 ? (
+                      <div className="text-sm text-gray-500 italic">
+                        {typingUsers.length === 1 
+                          ? `${typingUsers[0]}님이 입력 중...`
+                          : `${typingUsers.length}명이 입력 중...`
+                        }
+                      </div>
+                    ) : (
+                      <div className="text-sm text-transparent">공간</div>
+                    )}
+                  </div>
                   {/* 연결 상태 표시 */}
                   {!isConnected && (
                     <div className="px-4 py-2 text-xs text-yellow-600 bg-yellow-50 rounded">
@@ -708,6 +879,37 @@ export default function ChatRoomPage() {
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* 컨텍스트 메뉴 */}
+              {contextMenu && (
+                <div
+                  className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
+                  style={{
+                    left: `${contextMenu.x}px`,
+                    top: `${contextMenu.y}px`,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => handleStartEditMessage(contextMenu.messageId)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={() => handleReplyMessage(contextMenu.messageId)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    답글
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMessage(contextMenu.messageId)}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    삭제
+                  </button>
+                </div>
+              )}
 
               {/* 입력 영역 */}
               <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-4 bg-white">

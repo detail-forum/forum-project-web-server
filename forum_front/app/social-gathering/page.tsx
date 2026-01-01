@@ -123,13 +123,21 @@ export default function SocialGatheringPage() {
                   className="border p-4 rounded shadow hover:shadow-lg transition cursor-pointer"
                   onClick={() => handleGroupClick(group.id)}
                 >
-                  {group.profileImageUrl && (
-                    <img
-                      src={group.profileImageUrl}
-                      alt={group.name}
-                      className="w-full h-48 object-cover rounded mb-4"
-                    />
-                  )}
+                  <div className="w-full h-48 rounded mb-4 overflow-hidden bg-gray-200 flex items-center justify-center">
+                    {group.profileImageUrl ? (
+                      <img
+                        src={group.profileImageUrl}
+                        alt={group.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                        <span className="text-white text-4xl font-bold">
+                          {group.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <h3 className="text-lg font-semibold">{group.name}</h3>
                   <p className="text-gray-600 text-sm mt-2 line-clamp-2">{group.description}</p>
                   <div className="mt-4 flex justify-between items-center text-sm text-gray-500">

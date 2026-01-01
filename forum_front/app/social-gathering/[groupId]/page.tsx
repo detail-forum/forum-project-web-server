@@ -197,11 +197,19 @@ export default function GroupDetailPage() {
         const membershipResponse = await groupApi.checkMembership(groupId)
         if (membershipResponse.success && !membershipResponse.data) {
           alert('모임에서 탈퇴되었습니다.')
+          router.push('/social-gathering')
         }
       }
     } catch (error: any) {
       console.error('모임 탈퇴 실패:', error)
-      alert(error.response?.data?.message || '모임 탈퇴에 실패했습니다.')
+      const errorMessage = error.response?.data?.message || '모임 탈퇴에 실패했습니다.'
+      
+      // 모임 주인 탈퇴 시도 오류인 경우 더 명확한 메시지 표시
+      if (errorMessage.includes('모임 주인은 탈퇴할 수 없습니다')) {
+        alert('모임 주인은 탈퇴할 수 없습니다.\n\n모임을 삭제하려면 모임 관리 탭에서 "모임 삭제하기" 기능을 사용하세요.')
+      } else {
+        alert(errorMessage)
+      }
     }
   }
 
@@ -306,12 +314,19 @@ export default function GroupDetailPage() {
             </div>
             <div className="flex gap-2">
               {group.isMember ? (
-                <button
-                  onClick={handleLeave}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
-                >
-                  탈퇴하기
-                </button>
+                // 모임 주인은 탈퇴 버튼을 표시하지 않음
+                group.ownerUsername !== currentUsername ? (
+                  <button
+                    onClick={handleLeave}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
+                  >
+                    탈퇴하기
+                  </button>
+                ) : (
+                  <span className="text-sm text-gray-500 px-4 py-2 inline-flex items-center">
+                    모임 주인은 탈퇴할 수 없습니다
+                  </span>
+                )
               ) : (
                 <button
                   onClick={handleJoin}

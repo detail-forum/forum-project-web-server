@@ -274,7 +274,7 @@ public class GroupService {
 
         // 모임 주인은 탈퇴할 수 없음
         if (group.getOwner().getId().equals(currentUser.getId())) {
-            throw new IllegalStateException("모임 주인은 탈퇴할 수 없습니다.");
+            throw new ApplicationBadRequestException("모임 주인은 탈퇴할 수 없습니다. 모임을 삭제하려면 모임 관리 페이지에서 삭제 기능을 사용하세요.");
         }
 
         groupMemberRepository.deleteByGroupIdAndUserId(groupId, currentUser.getId());

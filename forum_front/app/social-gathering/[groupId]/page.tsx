@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
-import { groupApi } from '@/services/api'
+import { groupApi, postApi } from '@/services/api'
 import type { GroupDetailDTO, GroupPostListDTO, GroupChatRoomDTO, GroupMemberDTO, UpdateGroupDTO, PostListDTO } from '@/types/api'
-import { postApi } from '@/services/api'
 import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import PostCard from '@/components/PostCard'
@@ -98,13 +97,11 @@ export default function GroupDetailPage() {
 
   const fetchPosts = async () => {
     try {
-      // 일반 게시글 API에서 해당 모임의 게시글만 필터링
-      const response = await postApi.getPostList(0, 20, 'RESENT')
+      // 모임별 게시글 API 사용
+      const response = await postApi.getGroupPostList(groupId, 0, 20, 'RESENT')
       if (response.success && response.data) {
-        const allPosts = response.data.content || []
-        // 해당 모임의 게시글만 필터링
-        const groupPosts = allPosts.filter(post => post.groupId === groupId)
-        setPosts(groupPosts)
+        const content = response.data.content || []
+        setPosts(content)
       }
     } catch (error) {
       console.error('모임 활동 게시물 조회 실패:', error)

@@ -270,6 +270,13 @@ export const postApi = {
     cache.clear()
     return response.data
   },
+  
+  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(`/post/group/${groupId}`, {
+      params: { page, size, sortType },
+    })
+    return response.data
+  },
 }
 
 // Follow API
@@ -426,13 +433,6 @@ export const groupApi = {
     return response.data
   },
 
-  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10): Promise<ApiResponse<any>> => {
-    const response = await apiClient.get<ApiResponse<any>>(`/group/${groupId}/posts`, {
-      params: { page, size },
-    })
-    return response.data
-  },
-
   createGroupPost: async (groupId: number, data: import('@/types/api').CreateGroupPostDTO): Promise<ApiResponse<number>> => {
     const response = await apiClient.post<ApiResponse<number>>(`/group/${groupId}/posts`, data)
     return response.data
@@ -502,6 +502,13 @@ export const userPostApi = {
 
   getUserPostCount: async (username: string): Promise<ApiResponse<number>> => {
     const response = await apiClient.get<ApiResponse<number>>(`/post/user/${encodeURIComponent(username)}/count`)
+    return response.data
+  },
+  
+  getGroupPostList: async (groupId: number, page: number = 0, size: number = 10, sortType: string = 'RESENT'): Promise<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>> => {
+    const response = await apiClient.get<ApiResponse<{ content: PostListDTO[]; totalElements: number; totalPages: number }>>(`/post/group/${groupId}`, {
+      params: { page, size, sortType },
+    })
     return response.data
   },
 }

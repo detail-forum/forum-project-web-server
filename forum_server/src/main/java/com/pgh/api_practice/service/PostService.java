@@ -628,7 +628,7 @@ public class PostService {
                     .map(pt -> pt.getTag().getName())
                     .collect(Collectors.toList());
             
-            return PostListDTO.builder()
+            PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
                     .id(post.getId())
                     .title(post.getTitle())
                     .username(post.getUser().getUsername())
@@ -637,8 +637,72 @@ public class PostService {
                     .updateDateTime(updateTime)
                     .profileImageUrl(post.getProfileImageUrl())
                     .likeCount(likeCount)
-                    .tags(tags)
-                    .build();
+                    .tags(tags);
+            
+            // 모임 정보 추가
+            if (post.getGroup() != null) {
+                builder.groupId(post.getGroup().getId())
+                       .groupName(post.getGroup().getName())
+                       .isPublic(post.isPublic());
+            }
+            
+            return builder.build();
+        });
+    }
+    
+    /** ✅ 모임별 게시글 목록 조회 */
+    @Transactional(readOnly = true)
+    public Page<PostListDTO> getGroupPostList(Long groupId, Pageable pageable, String sortType) {
+        // 모임 존재 확인
+        if (!groupRepository.findByIdAndIsDeletedFalse(groupId).isPresent()) {
+            throw new ResourceNotFoundException("모임을 찾을 수 없습니다.");
+        }
+        
+        Page<Post> posts;
+        
+        if ("RESENT".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+        } else if ("HITS".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findByGroupIdOrderByViewsDesc(groupId, pageable);
+        } else if ("LIKES".equalsIgnoreCase(sortType)) {
+            posts = postRepository.findByGroupIdOrderByLikesDesc(groupId, pageable);
+        } else {
+            posts = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+        }
+        
+        return posts.map(post -> {
+            LocalDateTime updateTime = post.getUpdatedTime();
+            if (updateTime == null || updateTime.isBefore(post.getCreatedTime()) || 
+                updateTime.isBefore(LocalDateTime.of(1970, 1, 2, 0, 0))) {
+                updateTime = post.getCreatedTime();
+            }
+            
+            long likeCount = postLikeRepository.countByPostId(post.getId());
+            
+            // 태그 조회
+            List<String> tags = postTagRepository.findByPostId(post.getId()).stream()
+                    .map(pt -> pt.getTag().getName())
+                    .collect(Collectors.toList());
+            
+            PostListDTO.PostListDTOBuilder builder = PostListDTO.builder()
+                    .id(post.getId())
+                    .title(post.getTitle())
+                    .username(post.getUser().getUsername())
+                    .views(post.getViews())
+                    .createDateTime(post.getCreatedTime())
+                    .updateDateTime(updateTime)
+                    .profileImageUrl(post.getProfileImageUrl())
+                    .likeCount(likeCount)
+                    .tags(tags);
+            
+            // 모임 정보 추가
+            if (post.getGroup() != null) {
+                builder.groupId(post.getGroup().getId())
+                       .groupName(post.getGroup().getName())
+                       .isPublic(post.isPublic());
+            }
+            
+            return builder.build();
         });
     }
 }

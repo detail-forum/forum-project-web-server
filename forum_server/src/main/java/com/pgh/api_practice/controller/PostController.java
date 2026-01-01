@@ -131,4 +131,16 @@ public class PostController {
         long count = postService.getUserPostCount(username);
         return ResponseEntity.ok(ApiResponse.ok(count, "게시글 수 조회 성공"));
     }
+    
+    /** ✅ 모임별 게시글 목록 조회 */
+    // GET http://localhost:8081/post/group/{groupId}?sortType=RESENT
+    @GetMapping("/group/{groupId}")
+    public ResponseEntity<ApiResponse<Page<PostListDTO>>> getGroupPostList(
+            @PathVariable Long groupId,
+            Pageable pageable,
+            @RequestParam(defaultValue = "RESENT") String sortType
+    ) {
+        Page<PostListDTO> list = postService.getGroupPostList(groupId, pageable, sortType);
+        return ResponseEntity.ok(ApiResponse.ok(list, "모임 게시글 조회 성공"));
+    }
 }

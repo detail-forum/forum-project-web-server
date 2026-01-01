@@ -65,4 +65,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     
     @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND (p.group IS NULL OR p.isPublic = true) AND (p.title LIKE %:keyword% OR p.body LIKE %:keyword%) ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
     Page<Post> searchPostsByKeywordOrderByLikes(@Param("keyword") String keyword, Pageable pageable);
+    
+    // 모임별 게시글 조회 (모임 멤버는 모든 게시글 조회 가능, 외부는 공개 게시글만)
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND p.group.id = :groupId ORDER BY p.createdTime DESC")
+    Page<Post> findByGroupIdOrderByCreatedTimeDesc(@Param("groupId") Long groupId, Pageable pageable);
+    
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND p.group.id = :groupId ORDER BY p.views DESC")
+    Page<Post> findByGroupIdOrderByViewsDesc(@Param("groupId") Long groupId, Pageable pageable);
+    
+    @Query("SELECT p FROM Post p WHERE p.isDeleted = false AND p.group.id = :groupId ORDER BY (SELECT COUNT(pl) FROM PostLike pl WHERE pl.post.id = p.id) DESC, p.createdTime DESC")
+    Page<Post> findByGroupIdOrderByLikesDesc(@Param("groupId") Long groupId, Pageable pageable);
 }

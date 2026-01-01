@@ -45,6 +45,7 @@ export interface PostDetailDTO {
   title: string
   body: string
   username: string
+  nickname?: string  // 닉네임 (선택적)
   views?: string  // Jackson이 소문자로 변환 (기본값)
   Views?: string  // 백엔드에서 대문자로 올 수 있음 (대체)
   createDateTime: string

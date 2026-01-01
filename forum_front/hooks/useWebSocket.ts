@@ -166,9 +166,6 @@ export function useWebSocket({
         console.error('WebSocket 오류:', event)
         setIsConnected(false)
       },
-      onError: (event) => {
-        console.error('WebSocket 일반 오류:', event)
-      },
     })
 
     clientRef.current = client

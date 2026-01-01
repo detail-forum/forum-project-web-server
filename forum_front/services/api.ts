@@ -419,8 +419,10 @@ export const groupApi = {
     return response.data
   },
 
-  deleteGroup: async (groupId: number): Promise<ApiResponse<void>> => {
-    const response = await apiClient.delete<ApiResponse<void>>(`/group/${groupId}`)
+  deleteGroup: async (groupId: number, groupName: string): Promise<ApiResponse<void>> => {
+    const response = await apiClient.delete<ApiResponse<void>>(`/group/${groupId}`, {
+      params: { groupName },
+    })
     return response.data
   },
 

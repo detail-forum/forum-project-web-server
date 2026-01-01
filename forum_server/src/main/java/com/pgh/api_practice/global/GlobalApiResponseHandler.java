@@ -92,4 +92,9 @@ public class GlobalApiResponseHandler {
     public ResponseEntity<ApiResponse<Void>> handleApplicationUnauthorizedException(ApplicationUnauthorizedException ex) {
         return ResponseEntity.status(403).body(ApiResponse.fail(ex.getMessage()));
     }
+    
+    @ExceptionHandler(ApplicationBadRequestException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApplicationBadRequestException(ApplicationBadRequestException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.fail(ex.getMessage()));
+    }
 }

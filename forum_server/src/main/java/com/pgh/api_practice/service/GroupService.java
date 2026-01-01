@@ -2,6 +2,7 @@ package com.pgh.api_practice.service;
 
 import com.pgh.api_practice.dto.*;
 import com.pgh.api_practice.entity.*;
+import com.pgh.api_practice.exception.ApplicationBadRequestException;
 import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
 import com.pgh.api_practice.exception.ResourceNotFoundException;
 import com.pgh.api_practice.repository.*;
@@ -400,7 +401,7 @@ public class GroupService {
 
     /** 모임 삭제 */
     @Transactional
-    public void deleteGroup(Long groupId) {
+    public void deleteGroup(Long groupId, String groupName) {
         Users currentUser = getCurrentUser();
         if (currentUser == null) {
             throw new ApplicationUnauthorizedException("인증이 필요합니다.");
@@ -412,6 +413,13 @@ public class GroupService {
         // 모임 주인만 삭제 가능
         if (!group.getOwner().getId().equals(currentUser.getId())) {
             throw new ApplicationUnauthorizedException("모임 주인만 삭제할 수 있습니다.");
+        }
+
+        // 모임 이름 확인 (제공된 경우)
+        if (groupName != null && !groupName.trim().isEmpty()) {
+            if (!group.getName().equals(groupName.trim())) {
+                throw new ApplicationBadRequestException("모임 이름이 일치하지 않습니다.");
+            }
         }
 
         group.setDeleted(true);

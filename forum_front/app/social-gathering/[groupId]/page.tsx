@@ -35,6 +35,9 @@ export default function GroupDetailPage() {
   const [editProfileImageUrl, setEditProfileImageUrl] = useState('')
   const [sortType, setSortType] = useState<'RESENT' | 'HITS' | 'LIKES'>('RESENT')
   const [isPublicFilter, setIsPublicFilter] = useState<boolean | undefined>(undefined) // undefined: 전체, true: 공개만, false: 비공개만
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteGroupName, setDeleteGroupName] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (groupId) {
@@ -228,6 +231,29 @@ export default function GroupDetailPage() {
     } catch (error: any) {
       console.error('모임 수정 실패:', error)
       alert(error.response?.data?.message || '모임 수정에 실패했습니다.')
+    }
+  }
+
+  const handleDeleteGroup = async () => {
+    if (!group) return
+
+    if (deleteGroupName.trim() !== group.name) {
+      alert('모임 이름이 일치하지 않습니다.')
+      return
+    }
+
+    try {
+      setDeleting(true)
+      const response = await groupApi.deleteGroup(groupId, deleteGroupName.trim())
+      if (response.success) {
+        alert('모임이 삭제되었습니다.')
+        router.push('/social-gathering')
+      }
+    } catch (error: any) {
+      console.error('모임 삭제 실패:', error)
+      alert(error.response?.data?.message || '모임 삭제에 실패했습니다.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -588,6 +614,27 @@ export default function GroupDetailPage() {
               </div>
             </div>
 
+            {/* 모임 삭제 */}
+            {group?.isAdmin && (
+              <div className="mb-8 border-t pt-8">
+                <h3 className="text-xl font-semibold mb-4 text-red-600">위험한 작업</h3>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800 mb-4">
+                    모임을 삭제하면 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(true)
+                      setDeleteGroupName('')
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition"
+                  >
+                    모임 삭제하기
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* 멤버 관리 */}
             <div>
               <h3 className="text-xl font-semibold mb-4">멤버 관리</h3>
@@ -694,6 +741,51 @@ export default function GroupDetailPage() {
             fetchGroupDetail()
           }}
         />
+      )}
+
+      {/* 모임 삭제 확인 모달 */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-red-600 mb-4">모임 삭제 확인</h3>
+            <p className="text-gray-700 mb-4">
+              정말로 이 모임을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <p className="text-sm text-gray-600 mb-2">
+              삭제를 확인하려면 모임 이름을 정확히 입력하세요:
+            </p>
+            <p className="text-sm font-semibold text-gray-800 mb-4">
+              모임 이름: <span className="text-blue-600">{group?.name}</span>
+            </p>
+            <input
+              type="text"
+              value={deleteGroupName}
+              onChange={(e) => setDeleteGroupName(e.target.value)}
+              placeholder="모임 이름을 입력하세요"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
+              autoFocus
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setDeleteGroupName('')
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+                disabled={deleting}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteGroup}
+                disabled={deleting || deleteGroupName.trim() !== group?.name}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleting ? '삭제 중...' : '삭제하기'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -94,8 +94,11 @@ public class GroupController {
 
     /** 모임 삭제 */
     @DeleteMapping("/{groupId}")
-    public ResponseEntity<ApiResponse<Void>> deleteGroup(@PathVariable Long groupId) {
-        groupService.deleteGroup(groupId);
+    public ResponseEntity<ApiResponse<Void>> deleteGroup(
+            @PathVariable Long groupId,
+            @RequestParam(required = false) String groupName
+    ) {
+        groupService.deleteGroup(groupId, groupName);
         return ResponseEntity.ok(ApiResponse.ok("모임이 삭제되었습니다."));
     }
 

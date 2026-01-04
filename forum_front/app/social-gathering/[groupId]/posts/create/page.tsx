@@ -17,6 +17,7 @@ export default function CreateGroupPostPage() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [tagInput, setTagInput] = useState('')
   const [profileImageUrl, setProfileImageUrl] = useState<string | undefined>(undefined)
   const [showImageCrop, setShowImageCrop] = useState(false)
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
@@ -81,10 +82,17 @@ export default function CreateGroupPostPage() {
 
     try {
       setLoading(true)
+      // 태그 문자열을 배열로 변환 (쉼표로 구분, 공백 제거, 빈 값 제거)
+      const tags = tagInput
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
+      
       const response = await groupApi.createGroupPost(groupId, {
         title,
         body,
         profileImageUrl,
+        tags: tags.length > 0 ? tags : undefined,
       })
 
       if (response.success && response.data) {
@@ -142,6 +150,39 @@ export default function CreateGroupPostPage() {
               required
               minLength={10}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              태그 (쉼표로 구분)
+            </label>
+            <input
+              type="text"
+              id="tags"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              placeholder="예: redux, react"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              태그를 쉼표로 구분하여 입력하세요. 예: redux, react, javascript
+            </p>
+            {tagInput && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tagInput
+                  .split(',')
+                  .map(tag => tag.trim())
+                  .filter(tag => tag.length > 0)
+                  .map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 bg-blue-500 text-white text-sm rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
 
           <div>

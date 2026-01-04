@@ -432,6 +432,20 @@ export default function GroupPostDetailPage() {
                 </div>
               </div>
               
+              {/* 태그 표시 */}
+              {post.tags && post.tags.length > 0 && (
+                <div className="mt-6 flex flex-wrap gap-2">
+                  {post.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              
               <div className="mt-8 pt-8 border-t flex justify-between items-center">
                 <button
                   onClick={() => router.push(`/social-gathering/${groupId}`)}

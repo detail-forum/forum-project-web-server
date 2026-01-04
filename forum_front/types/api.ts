@@ -215,6 +215,7 @@ export interface GroupPostDetailDTO {
   isPublic?: boolean  // 모임 외부 노출 여부
   likeCount?: number  // 좋아요 수
   isLiked?: boolean  // 현재 사용자가 좋아요를 눌렀는지 여부
+  tags?: string[]  // 태그 목록
 }
 
 export interface CreateGroupPostDTO {
@@ -222,6 +223,7 @@ export interface CreateGroupPostDTO {
   body: string
   profileImageUrl?: string
   isPublic?: boolean  // 모임 외부 노출 여부
+  tags?: string[]  // 태그 목록
 }
 
 export interface GroupChatRoomDTO {

@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 public class CreateGroupPostDTO {
@@ -16,4 +18,6 @@ public class CreateGroupPostDTO {
     private String profileImageUrl;
     
     private Boolean isPublic;  // 모임 외부 노출 여부
+    
+    private List<String> tags;  // 태그 목록
 }

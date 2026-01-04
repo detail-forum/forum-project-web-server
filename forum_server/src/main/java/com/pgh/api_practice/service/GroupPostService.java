@@ -27,6 +27,8 @@ public class GroupPostService {
     private final GroupMemberRepository groupMemberRepository;
     private final UserRepository userRepository;
     private final PostLikeRepository postLikeRepository;
+    private final TagRepository tagRepository;
+    private final GroupPostTagRepository groupPostTagRepository;
 
     /** 현재 사용자 가져오기 */
     private Users getCurrentUser() {
@@ -63,7 +65,45 @@ public class GroupPostService {
                 .build();
 
         GroupPost created = groupPostRepository.save(post);
+        
+        // 태그 저장
+        if (dto.getTags() != null && !dto.getTags().isEmpty()) {
+            saveTags(created, dto.getTags());
+        }
+        
         return created.getId();
+    }
+
+    /** 태그 저장 헬퍼 메서드 */
+    private void saveTags(GroupPost post, List<String> tagNames) {
+        for (String tagName : tagNames) {
+            if (tagName == null || tagName.trim().isEmpty()) {
+                continue;
+            }
+            
+            String trimmedTagName = tagName.trim().toLowerCase();
+            
+            // 태그가 이미 존재하는지 확인
+            Tag tag = tagRepository.findByName(trimmedTagName)
+                    .orElseGet(() -> {
+                        Tag newTag = Tag.builder()
+                                .name(trimmedTagName)
+                                .build();
+                        return tagRepository.save(newTag);
+                    });
+            
+            // GroupPostTag 관계 생성 (중복 체크)
+            boolean exists = groupPostTagRepository.findByGroupPostId(post.getId()).stream()
+                    .anyMatch(gpt -> gpt.getTag().getId().equals(tag.getId()));
+            
+            if (!exists) {
+                GroupPostTag groupPostTag = GroupPostTag.builder()
+                        .groupPost(post)
+                        .tag(tag)
+                        .build();
+                groupPostTagRepository.save(groupPostTag);
+            }
+        }
     }
 
     /** 모임 활동 게시물 목록 조회 */
@@ -139,6 +179,11 @@ public class GroupPostService {
             isLiked = postLikeRepository.existsByGroupPostIdAndUserId(post.getId(), currentUser.getId());
         }
 
+        // 태그 조회
+        List<String> tags = groupPostTagRepository.findByGroupPostId(post.getId()).stream()
+                .map(gpt -> gpt.getTag().getName())
+                .collect(Collectors.toList());
+
         return GroupPostDetailDTO.builder()
                 .id(post.getId())
                 .title(post.getTitle())
@@ -155,6 +200,7 @@ public class GroupPostService {
                 .isPublic(post.isPublic())
                 .likeCount(likeCount)
                 .isLiked(isLiked)
+                .tags(tags)
                 .build();
     }
 
@@ -186,6 +232,16 @@ public class GroupPostService {
             post.setPublic(dto.getIsPublic());
         }
         groupPostRepository.save(post);
+        
+        // 태그 업데이트
+        if (dto.getTags() != null) {
+            // 기존 태그 삭제
+            groupPostTagRepository.deleteByGroupPostId(post.getId());
+            // 새 태그 저장
+            if (!dto.getTags().isEmpty()) {
+                saveTags(post, dto.getTags());
+            }
+        }
     }
 
     /** 모임 활동 게시물 삭제 */

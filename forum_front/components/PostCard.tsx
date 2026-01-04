@@ -99,10 +99,10 @@ function PostCard({ post }: PostCardProps) {
           <div className="flex items-center gap-2">
             {post.groupName && (
               <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                {post.groupName}
+                {(post.groupName).slice(0, 7  )}..
               </span>
             )}
-            <span className="font-medium text-gray-800">{post.username}</span>
+            <span className="font-medium text-gray-800">{(post.username)}</span>
           </div>
           <span className="text-gray-500">{formatDate(post.createDateTime)}</span>
         </div>

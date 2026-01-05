@@ -35,9 +35,10 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      // Redux store에서 토큰 가져오기 (우선순위)
+      // 쿠키에서 먼저 확인 (재발급 후 즉시 반영되도록)
+      // 그 다음 Redux store에서 확인
       const state = store.getState()
-      const token = state.auth.accessToken || getCookie('accessToken')
+      const token = getCookie('accessToken') || state.auth.accessToken
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
@@ -87,8 +88,8 @@ apiClient.interceptors.response.use(
       console.error('Error:', error.message)
     }
 
-    // 401 에러 처리 - 토큰 재발급 시도
-    if (error.response?.status === 401 && typeof window !== 'undefined' && originalRequest && !originalRequest._retry) {
+    // 401 또는 403 에러 처리 - 토큰 재발급 시도 (403도 인증 문제일 수 있음)
+    if ((error.response?.status === 401 || error.response?.status === 403) && typeof window !== 'undefined' && originalRequest && !originalRequest._retry) {
       if (isRefreshing) {
         // 이미 재발급 중이면 대기열에 추가
         return new Promise((resolve, reject) => {
@@ -158,7 +159,7 @@ apiClient.interceptors.response.use(
         if (response.data.success && response.data.data) {
           const { accessToken, refreshToken: newRefreshToken } = response.data.data
 
-          // 쿠키에 새 토큰 저장
+          // 쿠키에 새 토큰 저장 (먼저 저장하여 요청 인터셉터가 사용할 수 있도록)
           setCookie('accessToken', accessToken, 1) // 1일
           setCookie('refreshToken', newRefreshToken, 7) // 7일
 
@@ -168,12 +169,26 @@ apiClient.interceptors.response.use(
           // 대기 중인 요청들 처리
           processQueue(null, accessToken)
 
-          // 원래 요청 재시도
+          // 원래 요청 재시도 (새 토큰을 명시적으로 설정)
+          // 요청 인터셉터가 실행되기 전에 토큰을 설정하여 확실하게 적용
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${accessToken}`
           }
+          
+          // Redux 업데이트가 완료될 시간을 주기 위해 약간의 지연
+          // 하지만 동기적으로 처리하기 위해 Promise.resolve() 사용
           isRefreshing = false
-          return apiClient(originalRequest)
+          
+          // 새로운 요청 객체를 생성하여 토큰이 확실히 적용되도록 함
+          const retryRequest = {
+            ...originalRequest,
+            headers: {
+              ...originalRequest.headers,
+              Authorization: `Bearer ${accessToken}`
+            }
+          }
+          
+          return apiClient(retryRequest)
         } else {
           throw new Error('토큰 재발급 실패')
         }

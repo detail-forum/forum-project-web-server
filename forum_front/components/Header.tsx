@@ -9,6 +9,7 @@ import { logout } from '@/store/slices/authSlice'
 import { useRouter } from 'next/navigation'
 import { getUsernameFromToken } from '@/utils/jwt'
 import { authApi } from '@/services/api'
+import { store } from '@/store/store'
 import type { User } from '@/types/api'
 
 interface HeaderProps {
@@ -35,14 +36,31 @@ export default function Header({ onLoginClick }: HeaderProps) {
     }
   }, [isAuthenticated])
 
-  const fetchUserInfo = async () => {
+  const fetchUserInfo = async (retryCount = 0) => {
     try {
       const response = await authApi.getCurrentUser()
       if (response.success && response.data) {
         setUser(response.data)
       }
-    } catch (error) {
-      console.error('사용자 정보 조회 실패:', error)
+    } catch (error: any) {
+      // 403 또는 401 에러인 경우에만 처리 (다른 에러는 무시)
+      if (error?.response?.status === 403 || error?.response?.status === 401) {
+        // 토큰 재발급이 자동으로 처리되므로, 재발급 후 재시도
+        // 최대 2번만 재시도 (무한 루프 방지)
+        if (retryCount < 2) {
+          // 재발급이 완료될 시간을 주기 위해 약간의 지연
+          setTimeout(() => {
+            fetchUserInfo(retryCount + 1)
+          }, 1500)
+        } else {
+          // 재시도 후에도 실패하면 로그아웃 처리하지 않고 조용히 실패
+          // (다른 컴포넌트에서도 사용자 정보를 조회할 수 있으므로)
+          console.warn('사용자 정보 조회 실패: 최대 재시도 횟수 초과')
+        }
+      } else {
+        // 403/401이 아닌 다른 에러는 로그만 남기고 조용히 실패
+        console.error('사용자 정보 조회 실패:', error)
+      }
     }
   }
 

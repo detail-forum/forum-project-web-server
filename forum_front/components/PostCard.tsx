@@ -118,7 +118,7 @@ function PostCard({ post }: PostCardProps) {
         {/* 태그 표시 */}
         {post.tags && post.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {post.tags.map((tag, index) => (
+            {post.tags.slice(0, 3).map((tag, index) => (
               <button
                 key={index}
                 onClick={(e) => handleTagClick(e, tag)}

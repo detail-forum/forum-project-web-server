@@ -204,16 +204,90 @@ export default function GroupPostDetailPage() {
         return
       }
 
-      // 이미지
-      const imageMatch = line.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+      // 이미지 - 크기 정보 포함 패턴 지원
+      const imageMatch = line.match(/!\[([^\]]*)\]\(([^)]+?)(?:\s+width=["']?\d+["']?\s*height=["']?\d+["']?)?\)/)
       if (imageMatch) {
+        const alt = imageMatch[1] || '이미지'
+        let originalUrl = imageMatch[2].trim()
+        
+        // 마크다운에서 width/height 추출
+        const widthMatch = imageMatch[0].match(/width=["']?(\d+)["']?/)
+        const heightMatch = imageMatch[0].match(/height=["']?(\d+)["']?/)
+        let imageWidth: number | null = widthMatch ? parseInt(widthMatch[1]) : null
+        let imageHeight: number | null = heightMatch ? parseInt(heightMatch[1]) : null
+        
+        // URL에서 width/height 속성 제거 (다양한 패턴 처리)
+        originalUrl = originalUrl.replace(/\s+width\s*=\s*["']?\d+["']?\s*height\s*=\s*["']?\d+["']?/gi, '')
+        originalUrl = originalUrl.replace(/\s+height\s*=\s*["']?\d+["']?\s*width\s*=\s*["']?\d+["']?/gi, '')
+        originalUrl = originalUrl.replace(/\s+width\s*=\s*["']?\d+["']?/gi, '')
+        originalUrl = originalUrl.replace(/\s+height\s*=\s*["']?\d+["']?/gi, '')
+        // URL 인코딩된 크기 정보 제거
+        originalUrl = originalUrl.replace(/%20width%3D%22\d+%22%20height%3D%22\d+%22/gi, '')
+        originalUrl = originalUrl.replace(/%20height%3D%22\d+%22%20width%3D%22\d+%22/gi, '')
+        originalUrl = originalUrl.replace(/%20width%3D%22\d+%22/gi, '')
+        originalUrl = originalUrl.replace(/%20height%3D%22\d+%22/gi, '')
+        originalUrl = originalUrl.trim()
+        
+        let url = originalUrl
+        
+        // URL 정규화
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          if (!url.startsWith('/')) {
+            url = '/' + url
+          }
+          
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            let productionUrl = process.env.NEXT_PUBLIC_UPLOAD_BASE_URL || 'https://forum.rjsgud.com/uploads'
+            productionUrl = productionUrl.replace(/\/$/, '')
+            if (!productionUrl.endsWith('/uploads')) {
+              productionUrl = productionUrl + '/uploads'
+            }
+            let cleanUrl = url
+            if (cleanUrl.startsWith('/uploads/')) {
+              cleanUrl = cleanUrl.substring('/uploads/'.length)
+            } else if (cleanUrl.startsWith('/uploads')) {
+              cleanUrl = cleanUrl.substring('/uploads'.length)
+            }
+            url = `${productionUrl}/${cleanUrl}`
+          }
+        }
+        
+        const defaultHeight = 300
+        const finalHeight = imageHeight || defaultHeight
+        const finalWidth = imageWidth || undefined
+        
         elements.push(
-          <img
-            key={`img-${keyCounter++}`}
-            src={imageMatch[2]}
-            alt={imageMatch[1]}
-            className="max-w-full h-auto my-4 rounded"
-          />
+          <div key={`img-container-${keyCounter++}`} className="my-4">
+            <img
+              src={url}
+              alt={alt}
+              style={{
+                height: `${finalHeight}px`,
+                width: finalWidth ? `${finalWidth}px` : 'auto',
+                maxWidth: '100%',
+                objectFit: 'contain',
+              }}
+              className="rounded-lg border border-gray-200 shadow-sm"
+              onLoad={(e) => {
+                const img = e.currentTarget
+                if (!finalWidth) {
+                  const aspectRatio = img.naturalWidth / img.naturalHeight
+                  img.style.width = `${finalHeight * aspectRatio}px`
+                }
+              }}
+              onError={(e) => {
+                const img = e.currentTarget
+                const container = img.parentElement
+                if (container && !container.querySelector('.error-message')) {
+                  img.style.display = 'none'
+                  const errorDiv = document.createElement('div')
+                  errorDiv.className = 'error-message text-red-500 text-sm p-2 bg-red-50 rounded'
+                  errorDiv.textContent = `이미지를 불러올 수 없습니다: ${url}`
+                  container.appendChild(errorDiv)
+                }
+              }}
+            />
+          </div>
         )
         return
       }

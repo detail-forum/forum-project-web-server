@@ -17,6 +17,7 @@ import { cache } from '@/utils/cache'
 import { store } from '@/store/store'
 import { updateTokens, logout } from '@/store/slices/authSlice'
 import { getCookie, setCookie, removeCookie } from '@/utils/cookies'
+import { isTokenExpired, isTokenExpiringSoon } from '@/utils/jwt'
 
 // 프로덕션: HTTPS 도메인 사용
 // 개발 환경에서는 환경 변수로 localhost:8081 사용 가능
@@ -118,6 +119,24 @@ apiClient.interceptors.response.use(
         removeCookie('accessToken')
         removeCookie('refreshToken')
         store.dispatch(logout())
+        
+        // 사용자에게 명확한 메시지 표시
+        const errorMessage = error.response?.data?.message || '로그인이 필요합니다.'
+        console.warn('인증 실패:', errorMessage)
+        
+        window.location.href = '/'
+        return Promise.reject(error)
+      }
+      
+      // RefreshToken이 만료되었는지 확인
+      if (isTokenExpired(refreshToken)) {
+        processQueue(error)
+        isRefreshing = false
+        removeCookie('accessToken')
+        removeCookie('refreshToken')
+        store.dispatch(logout())
+        
+        console.warn('RefreshToken이 만료되었습니다. 다시 로그인해주세요.')
         window.location.href = '/'
         return Promise.reject(error)
       }
@@ -151,13 +170,29 @@ apiClient.interceptors.response.use(
         } else {
           throw new Error('토큰 재발급 실패')
         }
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         // RefreshToken도 만료되었거나 유효하지 않음
         processQueue(refreshError as AxiosError)
         isRefreshing = false
         removeCookie('accessToken')
         removeCookie('refreshToken')
         store.dispatch(logout())
+        
+        // 사용자에게 명확한 메시지 표시
+        const errorMessage = refreshError?.response?.data?.message || 
+                            refreshError?.message || 
+                            '세션이 만료되었습니다. 다시 로그인해주세요.'
+        
+        console.warn('토큰 재발급 실패:', errorMessage)
+        
+        // 사용자에게 알림 표시 (페이지 이동 전에 표시)
+        if (typeof window !== 'undefined') {
+          // 짧은 지연 후 alert 표시 (페이지 이동 전에 보이도록)
+          setTimeout(() => {
+            alert(errorMessage)
+          }, 100)
+        }
+        
         window.location.href = '/'
         return Promise.reject(refreshError)
       }

@@ -202,19 +202,19 @@ public class PostService {
         boolean filterGeneralOnly = "GENERAL".equalsIgnoreCase(groupFilter);
         boolean filterGroupOnly = "GROUP".equalsIgnoreCase(groupFilter);
         
-        // 1. posts 테이블에서 일반 게시글과 외부 공개 모임 게시글 조회
+        // 1. posts 테이블에서 일반 게시글과 외부 공개 모임 게시글 조회 (페이지네이션 없이 전체 조회)
         Page<Post> posts;
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(Pageable.unpaged());
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllPublicPostsOrderByViewsDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByViewsDesc(Pageable.unpaged());
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllPublicPostsOrderByLikesDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByLikesDesc(Pageable.unpaged());
         } else {
-            posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(pageable);
+            posts = postRepository.findAllPublicPostsOrderByCreatedTimeDesc(Pageable.unpaged());
         }
 
-        // 2. group_posts 테이블에서 외부 공개 게시글 조회 (필터링 필요 시)
+        // 2. group_posts 테이블에서 외부 공개 게시글 조회 (필터링 필요 시, 페이지네이션 없이 전체 조회)
         Page<GroupPost> publicGroupPosts = null;
         if (!filterGeneralOnly) {
             publicGroupPosts = groupPostRepository.findByIsPublicAndIsDeletedFalseOrderByCreatedTimeDesc(Pageable.unpaged());

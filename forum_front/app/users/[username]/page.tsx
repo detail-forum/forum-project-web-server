@@ -269,17 +269,30 @@ function UserProfileContent() {
                 </a>
               )}
               {!isOwnProfile && isAuthenticated && userInfo && (
-                <button
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={`mt-4 px-6 py-2 rounded-lg transition-colors ${
-                    following || userInfo.isFollowing
-                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      : 'bg-primary text-white hover:bg-secondary'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {followLoading ? '처리 중...' : (following || userInfo.isFollowing) ? '언팔로우' : '팔로우'}
-                </button>
+                <div className="flex items-center gap-3 mt-4">
+                  <button
+                    onClick={handleFollow}
+                    disabled={followLoading}
+                    className={`px-6 py-2 rounded-lg transition-colors ${
+                      following || userInfo.isFollowing
+                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-primary text-white hover:bg-secondary'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {followLoading ? '처리 중...' : (following || userInfo.isFollowing) ? '언팔로우' : '팔로우'}
+                  </button>
+                  {(following || userInfo.isFollowing) && (
+                    <button
+                      onClick={() => router.push(`/chat?user=${username}`)}
+                      className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      채팅하기
+                    </button>
+                  )}
+                </div>
               )}
               {isOwnProfile && (
                 <button

@@ -85,6 +85,8 @@ export default function ChatRoomPage() {
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [searchResults, setSearchResults] = useState<GroupChatMessageDTO[]>([])
   const [searching, setSearching] = useState(false)
+  const [showSearchSidebar, setShowSearchSidebar] = useState(false)
+  const [searchCategory, setSearchCategory] = useState<'ALL' | 'TEXT' | 'IMAGE' | 'FILE'>('ALL')
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false)
   const attachmentMenuRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -705,18 +707,45 @@ export default function ChatRoomPage() {
 
   // 채팅 검색
   const handleSearchMessages = async () => {
-    const query = prompt('검색어를 입력하세요:')
-    if (!query || !query.trim()) return
+    setShowSearchSidebar(true)
+    setShowMembers(false) // 멤버 사이드바 닫기
+  }
+
+  // 검색 실행
+  const handleSearchSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault()
+    }
+    
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      return
+    }
 
     try {
       setSearching(true)
-      setSearchQuery(query)
       
       // 백엔드 API 호출 시도
       try {
-        const response = await groupApi.searchChatMessages(groupId, roomId, query)
+        const response = await groupApi.searchChatMessages(groupId, roomId, searchQuery)
         if (response.success && response.data) {
-          setSearchResults(response.data.content || [])
+          let filtered = response.data.content || []
+          
+          // 카테고리 필터 적용
+          if (searchCategory !== 'ALL') {
+            filtered = filtered.filter(msg => {
+              if (searchCategory === 'TEXT') {
+                return !msg.fileUrl && !msg.fileName
+              } else if (searchCategory === 'IMAGE') {
+                return msg.fileUrl && (msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) || msg.messageType === 'IMAGE')
+              } else if (searchCategory === 'FILE') {
+                return msg.fileUrl && msg.fileName && !msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) && msg.messageType !== 'IMAGE'
+              }
+              return true
+            })
+          }
+          
+          setSearchResults(filtered)
           setShowSearchResults(true)
           return
         }
@@ -725,9 +754,22 @@ export default function ChatRoomPage() {
       }
       
       // 백엔드 API가 없으면 클라이언트 측 필터링 (임시)
-      const filtered = messages.filter(msg => 
-        msg.message.toLowerCase().includes(query.toLowerCase())
-      )
+      let filtered = messages.filter(msg => {
+        const matchesQuery = msg.message?.toLowerCase().includes(searchQuery.toLowerCase()) || false
+        
+        // 카테고리 필터 적용
+        if (searchCategory === 'ALL') {
+          return matchesQuery
+        } else if (searchCategory === 'TEXT') {
+          return matchesQuery && !msg.fileUrl && !msg.fileName
+        } else if (searchCategory === 'IMAGE') {
+          return matchesQuery && msg.fileUrl && (msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) || msg.messageType === 'IMAGE')
+        } else if (searchCategory === 'FILE') {
+          return matchesQuery && msg.fileUrl && msg.fileName && !msg.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) && msg.messageType !== 'IMAGE'
+        }
+        return false
+      })
+      
       setSearchResults(filtered)
       setShowSearchResults(true)
     } catch (error: any) {
@@ -1235,89 +1277,20 @@ export default function ChatRoomPage() {
                   {/* 검색 버튼 및 멤버 수 표시 */}
                   <div className="flex items-center gap-2">
                     {/* 검색 버튼 */}
-                    <div className="relative">
-                      <button
-                        onClick={handleSearchMessages}
-                        disabled={searching}
-                        className="p-2 text-gray-400 hover:text-gray-600 transition disabled:opacity-50"
-                        title="채팅 검색"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </button>
-                      {/* 검색 결과 표시 */}
-                      {showSearchResults && searchResults.length > 0 && (
-                        <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[400px] max-w-[600px] max-h-[400px] overflow-y-auto z-50">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm font-medium">검색 결과: "{searchQuery}" ({searchResults.length}개)</span>
-                            <button
-                              onClick={() => {
-                                setShowSearchResults(false)
-                                setSearchQuery('')
-                                setSearchResults([])
-                              }}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <div className="space-y-2">
-                            {searchResults.map((message) => (
-                              <div
-                                key={message.id}
-                                onClick={() => {
-                                  // 해당 메시지로 스크롤
-                                  const messageElement = document.querySelector(`[data-message-id="${message.id}"]`)
-                                  if (messageElement) {
-                                    messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                    messageElement.classList.add('ring-2', 'ring-blue-500')
-                                    setTimeout(() => {
-                                      messageElement.classList.remove('ring-2', 'ring-blue-500')
-                                    }, 2000)
-                                  }
-                                  setShowSearchResults(false)
-                                }}
-                                className="p-2 hover:bg-gray-50 rounded cursor-pointer border-b border-gray-100"
-                              >
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-medium text-gray-700">
-                                    {message.displayName || message.nickname}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {format(new Date(message.createdTime), 'MM/dd HH:mm', { locale: ko })}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600 line-clamp-2">
-                                  {message.message}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {showSearchResults && searchResults.length === 0 && searchQuery && (
-                        <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[300px] z-50">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">검색 결과 없음</span>
-                            <button
-                              onClick={() => {
-                                setShowSearchResults(false)
-                                setSearchQuery('')
-                              }}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <p className="text-sm text-gray-500">"{searchQuery}"에 대한 검색 결과가 없습니다.</p>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      onClick={handleSearchMessages}
+                      className="p-2 text-gray-400 hover:text-gray-600 transition"
+                      title="채팅 검색"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </button>
                     {/* 멤버 수 표시 버튼 */}
                     <button
                       onClick={() => {
                         setShowMembers(!showMembers)
+                        setShowSearchSidebar(false) // 검색 사이드바 닫기
                         if (!showMembers) {
                           fetchMembers()
                         }
@@ -1771,6 +1744,135 @@ export default function ChatRoomPage() {
             </div>
           )}
         </div>
+
+        {/* 검색 사이드바 */}
+        {showSearchSidebar && (
+          <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">채팅 검색</h3>
+                <button
+                  onClick={() => {
+                    setShowSearchSidebar(false)
+                    setSearchQuery('')
+                    setSearchResults([])
+                    setShowSearchResults(false)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* 검색 입력 */}
+              <form onSubmit={handleSearchSubmit} className="mb-4">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="검색어를 입력하세요..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </form>
+              
+              {/* 카테고리 필터 */}
+              <div className="mb-4">
+                <label className="text-xs font-medium text-gray-700 mb-2 block">카테고리</label>
+                <div className="flex flex-wrap gap-2">
+                  {(['ALL', 'TEXT', 'IMAGE', 'FILE'] as const).map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => {
+                        setSearchCategory(category)
+                        if (searchQuery.trim()) {
+                          setTimeout(() => handleSearchSubmit(), 100)
+                        }
+                      }}
+                      className={`px-3 py-1.5 text-xs rounded-lg transition ${
+                        searchCategory === category
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {category === 'ALL' ? '전체' : category === 'TEXT' ? '텍스트' : category === 'IMAGE' ? '이미지' : '파일'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* 검색 버튼 */}
+              <button
+                onClick={() => handleSearchSubmit()}
+                disabled={searching || !searchQuery.trim()}
+                className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                {searching ? '검색 중...' : '검색'}
+              </button>
+            </div>
+            
+            {/* 검색 결과 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {showSearchResults ? (
+                searchResults.length > 0 ? (
+                  <>
+                    <div className="text-sm text-gray-600 mb-3">
+                      검색 결과: <span className="font-semibold">{searchResults.length}개</span>
+                    </div>
+                    <div className="space-y-2">
+                      {searchResults.map((message) => (
+                        <div
+                          key={message.id}
+                          onClick={() => {
+                            // 해당 메시지로 스크롤
+                            const messageElement = document.querySelector(`[data-message-id="${message.id}"]`)
+                            if (messageElement) {
+                              messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              messageElement.classList.add('ring-2', 'ring-blue-500')
+                              setTimeout(() => {
+                                messageElement.classList.remove('ring-2', 'ring-blue-500')
+                              }, 2000)
+                            }
+                          }}
+                          className="p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-200 transition"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-medium text-gray-700">
+                              {message.displayName || message.nickname}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {format(new Date(message.createdTime), 'MM/dd HH:mm', { locale: ko })}
+                            </span>
+                          </div>
+                          {message.fileUrl ? (
+                            <div className="text-xs text-gray-500 mb-1">
+                              {message.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? '📷 이미지' : '📎 파일'}
+                              {message.fileName && `: ${message.fileName}`}
+                            </div>
+                          ) : null}
+                          {message.message && (
+                            <p className="text-sm text-gray-600 line-clamp-2">
+                              {message.message}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center text-gray-500 text-sm py-8">
+                    검색 결과가 없습니다.
+                  </div>
+                )
+              ) : (
+                <div className="text-center text-gray-400 text-sm py-8">
+                  검색어를 입력하고 검색 버튼을 클릭하세요.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 멤버 목록 사이드바 */}
         {showMembers && (

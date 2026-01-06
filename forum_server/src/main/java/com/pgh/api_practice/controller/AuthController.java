@@ -5,7 +5,6 @@ import com.pgh.api_practice.dto.auth.*;
 import com.pgh.api_practice.entity.Users;
 import com.pgh.api_practice.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.servlet.http.Cookie;

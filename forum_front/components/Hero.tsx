@@ -6,7 +6,7 @@ export default function Hero() {
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
             개발자들을 위한
             <br />
-            <span className="text-primary">게시판 서비스</span>
+            <span className="text-primary">SNS 서비스</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
             지식을 공유하고 소통하는 공간입니다.

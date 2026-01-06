@@ -30,7 +30,7 @@ export default function RecentPosts() {
   }, [fetchPosts])
 
   return (
-    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <section className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">최신 게시글</h2>

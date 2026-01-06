@@ -29,16 +29,17 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 10000, // 10초 타임아웃
+  withCredentials: true, // 쿠키를 포함하여 요청 전송
 })
 
 // 요청 인터셉터: 토큰 자동 추가
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
-      // 쿠키에서 먼저 확인 (재발급 후 즉시 반영되도록)
-      // 그 다음 Redux store에서 확인
+      // Redux store에서 토큰 확인
+      // 서버가 HttpOnly 쿠키로도 토큰을 설정하지만, Authorization 헤더도 함께 보냄 (이중 보안)
       const state = store.getState()
-      const token = getCookie('accessToken') || state.auth.accessToken
+      const token = state.auth.accessToken
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
@@ -109,9 +110,9 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      // 쿠키에서 refreshToken 가져오기 (Redux store 우선)
+      // Redux store에서 refreshToken 가져오기 (HttpOnly 쿠키는 JavaScript에서 읽을 수 없음)
       const state = store.getState()
-      const refreshToken = state.auth.refreshToken || getCookie('refreshToken')
+      const refreshToken = state.auth.refreshToken
 
       if (!refreshToken) {
         // RefreshToken이 없으면 로그아웃
@@ -150,20 +151,18 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        // RefreshToken으로 새 AccessToken 발급
+        // RefreshToken으로 새 AccessToken 발급 (withCredentials로 쿠키 자동 전송)
         const response = await axios.post<ApiResponse<LoginResponse>>(
           `${API_BASE_URL}/auth/refresh`,
-          { refreshToken } as RefreshTokenRequest
+          { refreshToken } as RefreshTokenRequest,
+          { withCredentials: true }
         )
 
         if (response.data.success && response.data.data) {
           const { accessToken, refreshToken: newRefreshToken } = response.data.data
 
-          // 쿠키에 새 토큰 저장 (먼저 저장하여 요청 인터셉터가 사용할 수 있도록)
-          setCookie('accessToken', accessToken, 1) // 1일
-          setCookie('refreshToken', newRefreshToken, 7) // 7일
-
-          // Redux 상태 업데이트 (중요!)
+          // 서버가 HttpOnly 쿠키로 자동 설정하므로, 클라이언트는 Redux store만 업데이트
+          // Redux 상태 업데이트 (UI 상태 관리용)
           store.dispatch(updateTokens({ accessToken, refreshToken: newRefreshToken }))
 
           // 대기 중인 요청들 처리

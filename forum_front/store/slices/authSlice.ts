@@ -22,10 +22,9 @@ const authSlice = createSlice({
       state.accessToken = action.payload.accessToken
       state.refreshToken = action.payload.refreshToken
       state.isAuthenticated = true
+      // 서버가 HttpOnly 쿠키로 자동 설정하므로, 클라이언트는 Redux store만 업데이트
+      // 기존 localStorage 정리 (마이그레이션)
       if (typeof window !== 'undefined') {
-        setCookie('accessToken', action.payload.accessToken, 1) // 1일
-        setCookie('refreshToken', action.payload.refreshToken, 7) // 7일
-        // 기존 localStorage 정리 (마이그레이션)
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
       }
@@ -34,10 +33,9 @@ const authSlice = createSlice({
       state.accessToken = action.payload.accessToken
       state.refreshToken = action.payload.refreshToken
       state.isAuthenticated = true // 토큰 업데이트 시 인증 상태 유지
+      // 서버가 HttpOnly 쿠키로 자동 설정하므로, 클라이언트는 Redux store만 업데이트
+      // 기존 localStorage 정리 (마이그레이션)
       if (typeof window !== 'undefined') {
-        setCookie('accessToken', action.payload.accessToken, 1)
-        setCookie('refreshToken', action.payload.refreshToken, 7)
-        // 기존 localStorage 정리 (마이그레이션)
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
       }

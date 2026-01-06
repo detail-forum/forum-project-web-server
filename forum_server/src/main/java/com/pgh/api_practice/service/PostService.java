@@ -15,6 +15,7 @@ import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
 import com.pgh.api_practice.exception.ResourceNotFoundException;
 import com.pgh.api_practice.repository.GroupMemberRepository;
 import com.pgh.api_practice.repository.GroupPostRepository;
+import com.pgh.api_practice.repository.GroupPostTagRepository;
 import com.pgh.api_practice.repository.GroupRepository;
 import com.pgh.api_practice.repository.PostLikeRepository;
 import com.pgh.api_practice.repository.PostRepository;
@@ -47,6 +48,7 @@ public class PostService {
     private final GroupRepository groupRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final GroupPostRepository groupPostRepository;
+    private final GroupPostTagRepository groupPostTagRepository;
 
     /** ✅ 게시글 저장 */
     @Transactional
@@ -279,6 +281,11 @@ public class PostService {
                 
                 long likeCount = postLikeRepository.countByGroupPostId(groupPost.getId());
                 
+                // 그룹 게시물 태그 조회
+                List<String> tags = groupPostTagRepository.findByGroupPostId(groupPost.getId()).stream()
+                        .map(gpt -> gpt.getTag().getName())
+                        .collect(Collectors.toList());
+                
                 PostListDTO dto = PostListDTO.builder()
                         .id(groupPost.getId())
                         .title(groupPost.getTitle())
@@ -288,7 +295,7 @@ public class PostService {
                         .updateDateTime(updateTime)
                         .profileImageUrl(groupPost.getProfileImageUrl())
                         .likeCount(likeCount)
-                        .tags(new ArrayList<>()) // GroupPost는 태그가 없을 수 있음
+                        .tags(tags)
                         .groupId(groupPost.getGroup().getId())
                         .groupName(groupPost.getGroup().getName())
                         .isPublic(groupPost.isPublic())

@@ -151,10 +151,11 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        // RefreshToken으로 새 AccessToken 발급 (withCredentials로 쿠키 자동 전송)
+        // RefreshToken으로 새 AccessToken 발급
+        // 서버가 쿠키에서 refreshToken을 읽을 수 있지만, 호환성을 위해 body에도 포함
         const response = await axios.post<ApiResponse<LoginResponse>>(
           `${API_BASE_URL}/auth/refresh`,
-          { refreshToken } as RefreshTokenRequest,
+          refreshToken ? { refreshToken } as RefreshTokenRequest : {},
           { withCredentials: true }
         )
 
@@ -252,6 +253,16 @@ export const authApi = {
 
   refreshToken: (data: RefreshTokenRequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/auth/refresh', data).then(r => r.data),
+  
+  verifyAuth: async (): Promise<ApiResponse<LoginResponse>> => {
+    const response = await apiClient.get<ApiResponse<LoginResponse>>('/auth/verify')
+    return response.data
+  },
+  
+  logout: async (): Promise<ApiResponse<void>> => {
+    const response = await apiClient.post<ApiResponse<void>>('/auth/logout')
+    return response.data
+  },
 }
 
 // Post API

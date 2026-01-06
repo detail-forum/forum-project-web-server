@@ -60,10 +60,38 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<LoginResponseDTO>> refresh(
-            @Valid @RequestBody RefreshTokenRequestDTO refreshTokenRequestDTO,
+            @RequestBody(required = false) RefreshTokenRequestDTO refreshTokenRequestDTO,
+            jakarta.servlet.http.HttpServletRequest request,
             HttpServletResponse response
     ) {
-        LoginResponseDTO result = authService.refreshToken(refreshTokenRequestDTO);
+        // 요청 body에서 refreshToken을 받거나, 없으면 쿠키에서 읽기
+        String refreshToken = null;
+        if (refreshTokenRequestDTO != null && refreshTokenRequestDTO.getRefreshToken() != null) {
+            refreshToken = refreshTokenRequestDTO.getRefreshToken();
+        } else {
+            // 쿠키에서 refreshToken 읽기
+            jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (jakarta.servlet.http.Cookie cookie : cookies) {
+                    if ("refreshToken".equals(cookie.getName())) {
+                        refreshToken = cookie.getValue();
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // refreshToken이 없으면 에러
+        if (refreshToken == null) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.fail("리프레시 토큰이 없습니다."));
+        }
+        
+        // RefreshTokenRequestDTO 생성
+        RefreshTokenRequestDTO requestDTO = new RefreshTokenRequestDTO();
+        requestDTO.setRefreshToken(refreshToken);
+        
+        LoginResponseDTO result = authService.refreshToken(requestDTO);
         
         // HttpOnly 쿠키로 새 토큰 설정
         Cookie accessTokenCookie = new Cookie("accessToken", result.getAccessToken());
@@ -81,6 +109,38 @@ public class AuthController {
         response.addCookie(refreshTokenCookie);
         
         return ResponseEntity.ok(ApiResponse.ok(result, "토큰이 재발급되었습니다."));
+    }
+    
+    /** ✅ 인증 상태 확인 및 토큰 정보 반환 (초기화용) */
+    @GetMapping("/verify")
+    public ResponseEntity<ApiResponse<LoginResponseDTO>> verifyAuth(
+            jakarta.servlet.http.HttpServletRequest request
+    ) {
+        // 쿠키에서 토큰 읽기
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        String accessToken = null;
+        String refreshToken = null;
+        
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
+                if ("accessToken".equals(cookie.getName())) {
+                    accessToken = cookie.getValue();
+                } else if ("refreshToken".equals(cookie.getName())) {
+                    refreshToken = cookie.getValue();
+                }
+            }
+        }
+        
+        // 토큰이 없으면 인증 실패
+        if (accessToken == null || refreshToken == null) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.fail("인증 토큰이 없습니다."));
+        }
+        
+        // 토큰 유효성 검증은 JWT 필터에서 이미 수행됨
+        // 여기서는 토큰 정보만 반환
+        LoginResponseDTO result = new LoginResponseDTO(accessToken, refreshToken);
+        return ResponseEntity.ok(ApiResponse.ok(result, "인증 상태 확인 성공"));
     }
     
     /** ✅ 현재 사용자 정보 조회 */
@@ -109,6 +169,25 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> deleteAccount() {
         authService.deleteAccount();
         return ResponseEntity.ok(ApiResponse.ok("회원탈퇴 성공"));
+    }
+    
+    /** ✅ 로그아웃 (쿠키 삭제) */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse response) {
+        // 쿠키 삭제
+        Cookie accessTokenCookie = new Cookie("accessToken", null);
+        accessTokenCookie.setHttpOnly(true);
+        accessTokenCookie.setPath("/");
+        accessTokenCookie.setMaxAge(0);
+        response.addCookie(accessTokenCookie);
+        
+        Cookie refreshTokenCookie = new Cookie("refreshToken", null);
+        refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setPath("/");
+        refreshTokenCookie.setMaxAge(0);
+        response.addCookie(refreshTokenCookie);
+        
+        return ResponseEntity.ok(ApiResponse.ok("로그아웃 성공"));
     }
 }
 

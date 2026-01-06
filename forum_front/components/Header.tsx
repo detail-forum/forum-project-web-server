@@ -81,13 +81,19 @@ export default function Header({ onLoginClick }: HeaderProps) {
     }
   }, [showDropdown])
 
-  const handleLogout = useCallback(() => {
-    // Redux 상태에서 로그아웃 처리 (토큰 제거 포함 - 쿠키도 함께 정리됨)
-    dispatch(logout())
-    
-    // 메인 페이지로 이동 후 새로고침하여 완전한 로그아웃 상태로 전환
-    router.push('/')
-    router.refresh()
+  const handleLogout = useCallback(async () => {
+    try {
+      // 서버의 쿠키도 삭제
+      await authApi.logout()
+    } catch (error) {
+      console.error('로그아웃 실패:', error)
+    } finally {
+      // Redux 상태 초기화
+      dispatch(logout())
+      // 메인 페이지로 이동 후 새로고침하여 완전한 로그아웃 상태로 전환
+      router.push('/')
+      router.refresh()
+    }
   }, [dispatch, router])
 
   return (

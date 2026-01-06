@@ -31,8 +31,13 @@ export default function MyPostsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setShowLoginModal(true)
+      // 모달이 이미 열려있지 않을 때만 열기
+      if (!showLoginModal) {
+        setShowLoginModal(true)
+      }
     } else {
+      // 로그인되면 모달 닫기
+      setShowLoginModal(false)
       fetchPosts()
       fetchMyTags()
     }
@@ -92,6 +97,11 @@ export default function MyPostsPage() {
         <LoginModal
           isOpen={showLoginModal}
           onClose={() => setShowLoginModal(false)}
+          onLoginSuccess={() => {
+            setShowLoginModal(false)
+            fetchPosts()
+            fetchMyTags()
+          }}
         />
       )}
       {!isAuthenticated && (
@@ -118,9 +128,17 @@ export default function MyPostsPage() {
       {isAuthenticated && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {tag ? `#${tag} 태그 내 게시글` : '내 게시글'}
-            </h1>
+            {/* 통계 버튼 추가 */}
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-3xl font-bold text-gray-900">
+                {tag ? `#${tag} 태그 내 게시글` : '내 게시글'}
+              </h1>
+              <Link href="/my-posts/dashboard">
+                <button className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors text-sm shadow-lg">
+                  통계 보기
+                </button>
+              </Link>
+            </div>
             <p className="text-gray-600 mb-4">
               {tag ? `#${tag} 태그가 포함된 ` : ''}작성한 게시글을 관리하세요
               {tag && (

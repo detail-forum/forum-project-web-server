@@ -15,8 +15,8 @@ import { getUsernameFromToken } from '@/utils/jwt'
 
 type TabType = 'intro' | 'posts' | 'chat' | 'manage'
 
-export default function GroupDetailPage() {
-  const params = useParams()
+  export default function GroupDetailPage() {
+    const params = useParams()
   const router = useRouter()
   const groupId = Number(params.groupId)
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)

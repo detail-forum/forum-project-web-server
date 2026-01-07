@@ -62,20 +62,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String resolveToken(HttpServletRequest request) {
+        // 1) Authorization 헤더에서 토큰 추출 (우선순위)
         String header = request.getHeader("Authorization");
-        if (!StringUtils.hasText(header)) return null;
-        // "Bearer xxx" 형식만 허용
-        if (header.startsWith("Bearer ")) {
+        if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
             return header.substring(7).trim();
         }
+        
+        // 2) 쿠키에서 토큰 추출 (Authorization 헤더가 없을 경우)
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
+                if ("accessToken".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        
         return null;
-    }
-
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        return uri.startsWith("/swagger-ui")
-                || uri.startsWith("/v3/api-docs")
-                || uri.startsWith("/api-docs");
     }
 }

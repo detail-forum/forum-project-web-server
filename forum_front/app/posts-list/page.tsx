@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { postApi } from '@/services/api'
 import type { PostListDTO } from '@/types/api'
 import Header from '@/components/Header'
@@ -133,6 +134,12 @@ function PostsListContent() {
                 )}
               </p>
             </div>
+            <Link
+              href="/posts"
+              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors font-medium"
+            >
+              게시글 작성
+            </Link>
           </div>
 
           {/* 검색 입력 필드 */}

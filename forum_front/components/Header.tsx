@@ -22,25 +22,24 @@ export default function Header({ onLoginClick }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const lastFetchedUsernameRef = useRef<string | null>(null) // 마지막으로 가져온 username 추적
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const dispatch = useDispatch()
   const router = useRouter()
 
-  // Hydration 에러 방지: 클라이언트에서만 마운트된 후 인증 상태 표시
-  useEffect(() => {
-    setMounted(true)
-    if (isAuthenticated) {
-      const currentUsername = getUsernameFromToken()
-      setUsername(currentUsername)
-      fetchUserInfo()
-    }
-  }, [isAuthenticated])
-
-  const fetchUserInfo = async (retryCount = 0) => {
+  const fetchUserInfo = useCallback(async (retryCount = 0) => {
     try {
       const response = await authApi.getCurrentUser()
       if (response.success && response.data) {
-        setUser(response.data)
+        // 사용자 정보가 변경된 경우에만 업데이트 (깜빡임 방지)
+        setUser(prevUser => {
+          // 프로필 이미지 URL과 username이 동일하면 업데이트하지 않음
+          if (prevUser?.profileImageUrl === response.data?.profileImageUrl && 
+              prevUser?.username === response.data?.username) {
+            return prevUser
+          }
+          return response.data
+        })
       }
     } catch (error: any) {
       // 403 또는 401 에러인 경우에만 처리 (다른 에러는 무시)
@@ -62,7 +61,28 @@ export default function Header({ onLoginClick }: HeaderProps) {
         console.error('사용자 정보 조회 실패:', error)
       }
     }
-  }
+  }, [])
+
+  // Hydration 에러 방지: 클라이언트에서만 마운트된 후 인증 상태 표시
+  useEffect(() => {
+    setMounted(true)
+    if (isAuthenticated) {
+      const currentUsername = getUsernameFromToken()
+      setUsername(currentUsername)
+      
+      // 이미 사용자 정보가 있고 username이 동일하면 다시 가져오지 않음 (깜빡임 방지)
+      if (lastFetchedUsernameRef.current !== currentUsername) {
+        lastFetchedUsernameRef.current = currentUsername
+        fetchUserInfo()
+      }
+    } else {
+      // 로그아웃 시 사용자 정보 초기화
+      setUser(null)
+      setUsername(null)
+      lastFetchedUsernameRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, fetchUserInfo])
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -119,17 +139,10 @@ export default function Header({ onLoginClick }: HeaderProps) {
               className="text-gray-700 hover:text-primary transition-colors"
               prefetch={true}
             >
-              게시글 목록
+              게시글
             </Link>
                 {mounted && isAuthenticated ? (
                   <>
-                    <Link
-                      href="/posts"
-                      className="text-gray-700 hover:text-primary transition-colors"
-                      prefetch={true}
-                    >
-                      게시글 작성
-                </Link>
                 <Link
                   href="/my-posts"
                   className="text-gray-700 hover:text-primary transition-colors"
@@ -154,15 +167,6 @@ export default function Header({ onLoginClick }: HeaderProps) {
                   </>
                 ) : (
                   <>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault()
-                        onLoginClick()
-                      }}
-                      className="text-gray-700 hover:text-primary transition-colors"
-                    >
-                      게시글 작성
-                  </button>
                   <button
                     onClick={(e) => {
                       e.preventDefault()
@@ -190,6 +194,19 @@ export default function Header({ onLoginClick }: HeaderProps) {
                       height={40}
                       className="rounded-full object-cover border-2 border-gray-200 hover:border-primary transition-colors"
                       unoptimized
+                      priority
+                      onError={(e) => {
+                        // 이미지 로드 실패 시 placeholder로 대체
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          const placeholder = document.createElement('div')
+                          placeholder.className = 'w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center border-2 border-gray-200'
+                          placeholder.innerHTML = `<span class="text-gray-600 font-medium text-sm">${username?.charAt(0).toUpperCase() || 'U'}</span>`
+                          parent.appendChild(placeholder)
+                        }
+                      }}
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center border-2 border-gray-200 hover:border-primary transition-colors">

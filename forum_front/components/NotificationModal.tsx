@@ -55,15 +55,17 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
     }
   }, [isAuthenticated])
 
-  const handleMarkAsRead = async (notificationId: number) => {
+  const handleMarkAsRead = async (notificationId: number): Promise<void> => {
     try {
       await notificationApi.markAsRead(notificationId)
+      // 상태는 이미 handleNotificationClick에서 업데이트했으므로 여기서는 확인만
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
       )
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (error) {
       console.error('알림 읽음 처리 실패:', error)
+      throw error // 에러를 다시 throw하여 호출자가 처리할 수 있도록
     }
   }
 
@@ -117,10 +119,26 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
     }
   }
 
-  const handleNotificationClick = (notification: NotificationDTO) => {
+  const handleNotificationClick = async (notification: NotificationDTO) => {
+    // 읽지 않은 알림이면 먼저 읽음 처리
     if (!notification.isRead) {
-      handleMarkAsRead(notification.id)
+      // 즉시 UI 업데이트 (optimistic update)
+      setNotifications(prev =>
+        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+      )
+      setUnreadCount(prev => Math.max(0, prev - 1))
+      
+      // 백엔드에 읽음 처리 요청 (비동기로 처리)
+      handleMarkAsRead(notification.id).catch(error => {
+        // 실패 시 롤백
+        console.error('알림 읽음 처리 실패:', error)
+        setNotifications(prev =>
+          prev.map(n => n.id === notification.id ? { ...n, isRead: false } : n)
+        )
+        setUnreadCount(prev => prev + 1)
+      })
     }
+    
     const link = getNotificationLink(notification)
     if (link !== '#') {
       onClose()
@@ -130,8 +148,13 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
 
   useEffect(() => {
     if (isOpen && isAuthenticated) {
+      // 모달이 열릴 때마다 최신 알림 상태를 가져옴
       fetchNotifications()
       fetchUnreadCount()
+    } else if (!isOpen) {
+      // 모달이 닫힐 때 상태 초기화 (다음에 열 때 깨끗한 상태로 시작)
+      setNotifications([])
+      setLoading(true)
     }
   }, [isOpen, isAuthenticated, fetchNotifications, fetchUnreadCount])
 
@@ -158,7 +181,7 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
       <div
         ref={modalRef}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
       >
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <h2 className="text-2xl font-bold text-gray-900">알림</h2>
@@ -194,12 +217,11 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
           ) : (
             <div className="divide-y divide-gray-200">
               {notifications.map((notification) => {
-                const link = getNotificationLink(notification)
                 return (
                   <div
                     key={notification.id}
                     className={`px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      !notification.isRead ? 'bg-blue-50' : 'bg-white'
+                      notification.isRead ? 'bg-white' : 'bg-blue-50'
                     }`}
                     onClick={() => handleNotificationClick(notification)}
                   >

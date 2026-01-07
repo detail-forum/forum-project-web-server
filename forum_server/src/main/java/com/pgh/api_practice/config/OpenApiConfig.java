@@ -49,7 +49,7 @@ public class OpenApiConfig {
                                 .url("http://localhost:8081")
                                 .description("로컬 개발 서버"),
                         new Server()
-                                .url("https://forum.rjsgud.com")
+                                .url("https://forum.rjsgud.com/api")
                                 .description("프로덕션 서버")
                 ));
     }

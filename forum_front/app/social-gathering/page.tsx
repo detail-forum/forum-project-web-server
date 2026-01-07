@@ -71,7 +71,7 @@ export default function SocialGatheringPage() {
       <div 
         className="p-8 text-center relative"
         style={{
-          backgroundImage: 'url(/asset/베너 배경 이미지.png)',
+          backgroundImage: 'url(/asset/groupbanner.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',

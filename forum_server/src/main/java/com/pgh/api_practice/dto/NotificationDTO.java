@@ -1,5 +1,6 @@
 package com.pgh.api_practice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.pgh.api_practice.entity.Notification;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +25,9 @@ public class NotificationDTO {
     private Long relatedGroupPostId;
     private Long relatedGroupId;  // 그룹 게시글의 그룹 ID
     private Long relatedCommentId;
-    private boolean isRead;
+    
+    @JsonProperty("isRead")
+    private boolean isRead;  // Jackson이 isRead를 read로 직렬화하는 것을 방지
+    
     private LocalDateTime createdTime;
 }

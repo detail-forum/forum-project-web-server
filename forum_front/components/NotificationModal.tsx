@@ -38,7 +38,12 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
       setLoading(true)
       const response = await notificationApi.getNotifications(0, 50) // 최대 50개
       if (response.success && response.data) {
-        setNotifications(response.data.content || [])
+        // isRead가 0/1로 올 수 있으므로 boolean으로 변환
+        const notifications = (response.data.content || []).map((n: any) => ({
+          ...n,
+          isRead: typeof n.isRead === 'boolean' ? n.isRead : n.isRead === 1 || n.isRead === '1' || n.isRead === true
+        }))
+        setNotifications(notifications)
       }
     } catch (error) {
       console.error('알림 조회 실패:', error)
@@ -64,9 +69,16 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
       // 백엔드에서 업데이트된 알림 정보를 받아옴
       const response = await notificationApi.markAsRead(notificationId)
       if (response.success && response.data) {
+        // isRead를 boolean으로 변환
+        const updatedNotification = {
+          ...response.data,
+          isRead: typeof response.data.isRead === 'boolean' 
+            ? response.data.isRead 
+            : response.data.isRead === 1 || response.data.isRead === '1' || response.data.isRead === true
+        }
         // 서버에서 반환한 최신 상태로 업데이트
         setNotifications(prev =>
-          prev.map(n => n.id === notificationId ? response.data : n)
+          prev.map(n => n.id === notificationId ? updatedNotification : n)
         )
         setUnreadCount(prev => Math.max(0, prev - 1))
       }

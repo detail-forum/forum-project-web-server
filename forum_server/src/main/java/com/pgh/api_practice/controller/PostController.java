@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -225,7 +226,8 @@ public class PostController {
             summary = "모임별 게시글 목록 조회",
             description = """
                     특정 모임의 게시글을 조회합니다.
-                    
+
+                    - sortType=RESENT : 최신순
                     - isPublic=true : 공개 게시글만
                     - isPublic=false 또는 미지정 : 전체
                     """
@@ -235,6 +237,7 @@ public class PostController {
             @Parameter(description = "모임 ID", required = true, example = "1")
             @PathVariable Long groupId,
 
+            @Parameter(hidden = true)
             Pageable pageable,
 
             @Parameter(description = "정렬 기준", example = "RESENT")
@@ -243,8 +246,16 @@ public class PostController {
             @Parameter(description = "공개 여부 필터", example = "true")
             @RequestParam(required = false) Boolean isPublic
     ) {
+        Pageable safePageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize()
+        );
+
         Page<PostListDTO> list =
-                postService.getGroupPostList(groupId, pageable, sortType, isPublic);
-        return ResponseEntity.ok(ApiResponse.ok(list, "모임 게시글 조회 성공"));
+                postService.getGroupPostList(groupId, safePageable, sortType, isPublic);
+
+        return ResponseEntity.ok(
+                ApiResponse.ok(list, "모임 게시글 조회 성공")
+        );
     }
 }

@@ -215,17 +215,43 @@ public class PostService {
     }
 
     @Transactional(readOnly = true)
-    public Page<PostListDTO> getGroupPostList(Long groupId, Pageable pageable, String sortType, Boolean isPublic) {
+    public Page<PostListDTO> getGroupPostList(
+            Long groupId,
+            Pageable pageable,
+            String sortType,
+            Boolean isPublic
+    ) {
         groupRepository.findByIdAndIsDeletedFalse(groupId)
                 .orElseThrow(() -> new PostException(PostErrorCode.GROUP_NOT_FOUND));
 
-        return postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable)
-                .map(this::toListDTO);
+        Sort sort;
+        if ("VIEW".equalsIgnoreCase(sortType)) {
+            sort = Sort.by(Sort.Direction.DESC, "views")
+                    .and(Sort.by(Sort.Direction.DESC, "createdTime"));
+        } else {
+            sort = Sort.by(Sort.Direction.DESC, "createdTime");
+        }
+
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                sort
+        );
+
+        Page<Post> page;
+        if ("VIEW".equalsIgnoreCase(sortType)) {
+            page = postRepository.findByGroupId(groupId, sortedPageable);
+        } else {
+            page = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, sortedPageable);
+        }
+
+        return page.map(this::toListDTO);
     }
 
     /* =========================
        내부 헬퍼
        ========================= */
+
     private List<String> getTags(Long postId) {
         return postTagRepository.findByPostId(postId)
                 .stream()
@@ -241,14 +267,26 @@ public class PostService {
                 .views(post.getViews())
                 .createDateTime(post.getCreatedTime())
                 .updateDateTime(
-                        post.getUpdatedTime() != null ? post.getUpdatedTime() : post.getCreatedTime()
+                        post.getUpdatedTime() != null
+                                ? post.getUpdatedTime()
+                                : post.getCreatedTime()
                 )
                 .profileImageUrl(post.getProfileImageUrl())
                 .likeCount(postLikeRepository.countByPostId(post.getId()))
                 .tags(getTags(post.getId()))
-                .groupId(post.getGroup() != null ? post.getGroup().getId() : null)
-                .groupName(post.getGroup() != null ? post.getGroup().getName() : null)
-                .isPublic(post.getGroup() != null && post.isPublic())
+                .groupId(
+                        post.getGroup() != null
+                                ? post.getGroup().getId()
+                                : null
+                )
+                .groupName(
+                        post.getGroup() != null
+                                ? post.getGroup().getName()
+                                : null
+                )
+                .isPublic(
+                        post.getGroup() != null && post.isPublic()
+                )
                 .build();
     }
 

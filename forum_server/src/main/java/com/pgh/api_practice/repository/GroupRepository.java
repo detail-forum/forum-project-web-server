@@ -11,7 +11,6 @@ import java.util.Optional;
 public interface GroupRepository extends JpaRepository<Group, Long> {
     Optional<Group> findByIdAndIsDeletedFalse(Long id);
     Page<Group> findByIsDeletedFalseOrderByCreatedTimeDesc(Pageable pageable);
-    long countByOwnerId(Long ownerId);
     Page<Group> findByIsDeletedFalseAndNameContainingIgnoreCaseOrderByCreatedTimeDesc(String name, Pageable pageable);
     
     // 주인이 특정 사용자인 모임 조회

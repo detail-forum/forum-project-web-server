@@ -2,8 +2,8 @@ package com.pgh.api_practice.service;
 
 import com.pgh.api_practice.entity.Follow;
 import com.pgh.api_practice.entity.Users;
-import com.pgh.api_practice.exception.ApplicationUnauthorizedException;
-import com.pgh.api_practice.exception.ResourceNotFoundException;
+import com.pgh.api_practice.errorcode.FollowErrorCode;
+import com.pgh.api_practice.exception.FollowException;
 import com.pgh.api_practice.repository.FollowRepository;
 import com.pgh.api_practice.repository.UserRepository;
 import lombok.AllArgsConstructor;
@@ -21,97 +21,114 @@ public class FollowService {
     private final FollowRepository followRepository;
     private final UserRepository userRepository;
 
-    /** ✅ 팔로우 */
+    /** =========================
+     *  팔로우
+     *  ========================= */
     @Transactional
     public boolean followUser(Long followingId) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        if (authentication == null
+                || authentication.getName() == null
+                || "anonymousUser".equals(authentication.getName())) {
+            throw new FollowException(FollowErrorCode.UNAUTHORIZED);
         }
-        
-        String username = authentication.getName();
-        Users follower = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
-        
+
+        Users follower = userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new FollowException(FollowErrorCode.USER_NOT_FOUND));
+
         Users following = userRepository.findById(followingId)
-                .orElseThrow(() -> new ResourceNotFoundException("팔로우할 유저를 찾을 수 없습니다."));
-        
-        // 자기 자신을 팔로우할 수 없음
+                .orElseThrow(() -> new FollowException(FollowErrorCode.TARGET_USER_NOT_FOUND));
+
+        // 자기 자신 팔로우 금지
         if (follower.getId().equals(followingId)) {
-            throw new IllegalArgumentException("자기 자신을 팔로우할 수 없습니다.");
+            throw new FollowException(FollowErrorCode.SELF_FOLLOW_NOT_ALLOWED);
         }
-        
-        // 이미 팔로우 중인지 확인
-        if (followRepository.existsByFollowerIdAndFollowingId(follower.getId(), followingId)) {
-            return false; // 이미 팔로우 중
+
+        // 이미 팔로우 중이면 false
+        if (followRepository.existsByFollowerIdAndFollowingId(
+                follower.getId(), followingId)) {
+            return false;
         }
-        
-        // 팔로우 생성
+
         Follow follow = Follow.builder()
                 .follower(follower)
                 .following(following)
                 .build();
+
         followRepository.save(follow);
-        
-        return true; // 팔로우 성공
+        return true;
     }
-    
-    /** ✅ 언팔로우 */
+
+    /** =========================
+     *  언팔로우
+     *  ========================= */
     @Transactional
     public boolean unfollowUser(Long followingId) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        if (authentication == null
+                || authentication.getName() == null
+                || "anonymousUser".equals(authentication.getName())) {
+            throw new FollowException(FollowErrorCode.UNAUTHORIZED);
         }
-        
-        String username = authentication.getName();
-        Users follower = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
-        
-        // 팔로우 관계 삭제
-        followRepository.deleteByFollowerIdAndFollowingId(follower.getId(), followingId);
-        
-        return true; // 언팔로우 성공
+
+        Users follower = userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new FollowException(FollowErrorCode.USER_NOT_FOUND));
+
+        followRepository.deleteByFollowerIdAndFollowingId(
+                follower.getId(), followingId);
+
+        return true;
     }
-    
-    /** ✅ 팔로우 상태 확인 */
+
+    /** =========================
+     *  팔로우 상태 확인
+     *  ========================= */
     @Transactional(readOnly = true)
     public boolean isFollowing(Long followingId) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+        if (authentication == null
+                || authentication.getName() == null
+                || "anonymousUser".equals(authentication.getName())) {
             return false;
         }
-        
-        String username = authentication.getName();
-        Users follower = userRepository.findByUsername(username).orElse(null);
+
+        Users follower = userRepository.findByUsername(authentication.getName())
+                .orElse(null);
+
         if (follower == null) {
             return false;
         }
-        
-        return followRepository.existsByFollowerIdAndFollowingId(follower.getId(), followingId);
+
+        return followRepository.existsByFollowerIdAndFollowingId(
+                follower.getId(), followingId);
     }
-    
-    /** ✅ 팔로워 수 조회 */
+
+    /** =========================
+     *  팔로워 수
+     *  ========================= */
     @Transactional(readOnly = true)
     public long getFollowerCount(Long userId) {
         return followRepository.countByFollowingId(userId);
     }
-    
-    /** ✅ 팔로잉 수 조회 */
+
+    /** =========================
+     *  팔로잉 수
+     *  ========================= */
     @Transactional(readOnly = true)
     public long getFollowingCount(Long userId) {
         return followRepository.countByFollowerId(userId);
     }
-    
-    /** ✅ 팔로워 목록 조회 */
+
+    /** =========================
+     *  팔로워 목록
+     *  ========================= */
     @Transactional(readOnly = true)
     public List<UserInfoDTO> getFollowers(Long userId) {
-        // 사용자 존재 확인
         userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
-        
+                .orElseThrow(() -> new FollowException(FollowErrorCode.TARGET_USER_NOT_FOUND));
+
         List<Users> followers = followRepository.findFollowersByUserId(userId);
-        
+
         return followers.stream()
                 .map(follower -> UserInfoDTO.builder()
                         .id(follower.getId())
@@ -120,65 +137,77 @@ public class FollowService {
                         .email(follower.getEmail())
                         .profileImageUrl(follower.getProfileImageUrl())
                         .githubLink(follower.getGithubLink())
-                        .followerCount(followRepository.countByFollowingId(follower.getId()))
-                        .followingCount(followRepository.countByFollowerId(follower.getId()))
+                        .followerCount(
+                                followRepository.countByFollowingId(follower.getId())
+                        )
+                        .followingCount(
+                                followRepository.countByFollowerId(follower.getId())
+                        )
                         .isFollowing(checkIfCurrentUserIsFollowing(follower.getId()))
                         .build())
                 .collect(Collectors.toList());
     }
-    
-    /** ✅ 팔로잉 목록 조회 */
+
+    /** =========================
+     *  팔로잉 목록
+     *  ========================= */
     @Transactional(readOnly = true)
     public List<UserInfoDTO> getFollowing(Long userId) {
-        // 사용자 존재 확인
         userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
-        
+                .orElseThrow(() -> new FollowException(FollowErrorCode.TARGET_USER_NOT_FOUND));
+
         List<Users> following = followRepository.findFollowingByUserId(userId);
-        
+
         return following.stream()
-                .map(followingUser -> UserInfoDTO.builder()
-                        .id(followingUser.getId())
-                        .username(followingUser.getUsername())
-                        .nickname(followingUser.getNickname())
-                        .email(followingUser.getEmail())
-                        .profileImageUrl(followingUser.getProfileImageUrl())
-                        .githubLink(followingUser.getGithubLink())
-                        .followerCount(followRepository.countByFollowingId(followingUser.getId()))
-                        .followingCount(followRepository.countByFollowerId(followingUser.getId()))
-                        .isFollowing(true) // 팔로잉 목록이므로 항상 true
+                .map(user -> UserInfoDTO.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .nickname(user.getNickname())
+                        .email(user.getEmail())
+                        .profileImageUrl(user.getProfileImageUrl())
+                        .githubLink(user.getGithubLink())
+                        .followerCount(
+                                followRepository.countByFollowingId(user.getId())
+                        )
+                        .followingCount(
+                                followRepository.countByFollowerId(user.getId())
+                        )
+                        .isFollowing(true)
                         .build())
                 .collect(Collectors.toList());
     }
-    
-    /** 현재 사용자가 특정 사용자를 팔로우하는지 확인 */
+
+    /** =========================
+     *  현재 사용자 팔로우 여부
+     *  ========================= */
     private boolean checkIfCurrentUserIsFollowing(Long userId) {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
+        if (authentication == null
+                || authentication.getName() == null
+                || "anonymousUser".equals(authentication.getName())) {
             return false;
         }
-        
-        String username = authentication.getName();
-        Users currentUser = userRepository.findByUsername(username).orElse(null);
+
+        Users currentUser = userRepository.findByUsername(authentication.getName())
+                .orElse(null);
+
         if (currentUser == null) {
             return false;
         }
-        
-        boolean exists = followRepository.existsByFollowerIdAndFollowingId(currentUser.getId(), userId);
-        System.out.println("팔로우 상태 확인 - 현재 사용자 ID: " + currentUser.getId() + ", 대상 사용자 ID: " + userId + ", 팔로우 여부: " + exists);
-        return exists;
+
+        return followRepository.existsByFollowerIdAndFollowingId(
+                currentUser.getId(), userId);
     }
-    
-    /** ✅ 사용자 정보 조회 (username으로) */
+
+    /** =========================
+     *  사용자 정보 조회 (username 기준)
+     *  ========================= */
     @Transactional(readOnly = true)
     public UserInfoDTO getUserInfoByUsername(String username) {
+
         Users user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
-        
-        long followerCount = followRepository.countByFollowingId(user.getId());
-        long followingCount = followRepository.countByFollowerId(user.getId());
-        boolean isFollowing = checkIfCurrentUserIsFollowing(user.getId());
-        
+                .orElseThrow(() -> new FollowException(FollowErrorCode.USER_NOT_FOUND));
+
         return UserInfoDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -186,13 +215,19 @@ public class FollowService {
                 .email(user.getEmail())
                 .profileImageUrl(user.getProfileImageUrl())
                 .githubLink(user.getGithubLink())
-                .followerCount(followerCount)
-                .followingCount(followingCount)
-                .isFollowing(isFollowing)
+                .followerCount(
+                        followRepository.countByFollowingId(user.getId())
+                )
+                .followingCount(
+                        followRepository.countByFollowerId(user.getId())
+                )
+                .isFollowing(checkIfCurrentUserIsFollowing(user.getId()))
                 .build();
     }
-    
-    /** 사용자 정보 DTO */
+
+    /** =========================
+     *  사용자 정보 DTO
+     *  ========================= */
     @lombok.Getter
     @lombok.Setter
     @lombok.Builder

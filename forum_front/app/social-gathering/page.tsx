@@ -7,6 +7,7 @@ import type { RootState } from '@/store/store'
 import Header from '@/components/Header'
 import { groupApi } from '@/services/api'
 import type { GroupListDTO } from '@/types/api'
+import Image from 'next/image'
 
 export default function SocialGatheringPage() {
   const router = useRouter()
@@ -68,15 +69,24 @@ export default function SocialGatheringPage() {
     <div>
       <Header onLoginClick={() => {}} />
       {/* 배너 영역 */}
-      <div 
-        className="p-8 text-center relative"
-        style={{
-          backgroundImage: 'url(/asset/groupbanner.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
+      <div className="p-8 text-center relative overflow-hidden" style={{ minHeight: '200px', position: 'relative' }}>
+        <div style={{ 
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 0
+        }}>
+          <Image
+            src="/asset/groupbanner.png"
+            alt="배너 배경"
+            fill
+            className="object-cover"
+            priority
+            unoptimized
+          />
+        </div>
         <div className="relative z-10">
           <h1 className="text-2xl font-bold text-white drop-shadow-lg">
             마음이 맞는 사람들끼리 모여서 활동해봐요!

@@ -502,11 +502,6 @@ export const groupApi = {
     })
     return response.data
   },
-    const response = await apiClient.get<ApiResponse<any>>('/group', {
-      params,
-    })
-    return response.data
-  },
 
   getGroupDetail: async (groupId: number): Promise<ApiResponse<import('@/types/api').GroupDetailDTO>> => {
     const response = await apiClient.get<ApiResponse<import('@/types/api').GroupDetailDTO>>(`/group/${groupId}`)

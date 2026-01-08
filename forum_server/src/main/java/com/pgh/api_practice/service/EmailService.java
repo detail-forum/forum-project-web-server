@@ -21,8 +21,7 @@ public class EmailService {
     public EmailService(
             JavaMailSender mailSender,
             @Value("${spring.mail.username}") String fromEmail,
-            @Value("${app.base-url:http://localhost:3000}") String baseUrl
-    ) {
+            @Value("${app.base-url:http://localhost:3000}") String baseUrl) {
         this.mailSender = mailSender;
         this.fromEmail = fromEmail;
         this.baseUrl = baseUrl;
@@ -41,7 +40,7 @@ public class EmailService {
             helper.setSubject("[rjsgud's forum] 이메일 인증을 완료해주세요");
 
             String verificationUrl = baseUrl + "/verify-email?token=" + verificationToken;
-            
+
             String htmlContent = buildVerificationEmailHtml(username, verificationUrl);
             helper.setText(htmlContent, true);
 
@@ -64,9 +63,11 @@ public class EmailService {
                 "<style>" +
                 "body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }" +
                 ".container { max-width: 600px; margin: 0 auto; padding: 20px; }" +
-                ".header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }" +
+                ".header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }"
+                +
                 ".content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 5px 5px; }" +
-                ".button { display: inline-block; padding: 12px 30px; background-color: #4F46E5; color: #ffffff !important; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }" +
+                ".button { display: inline-block; padding: 12px 30px; background-color: #4F46E5; color: #ffffff !important; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }"
+                +
                 ".footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }" +
                 "</style>" +
                 "</head>" +
@@ -80,7 +81,9 @@ public class EmailService {
                 "<p>안녕하세요, <strong>" + username + "</strong>님!</p>" +
                 "<p>회원가입을 완료하기 위해 아래 버튼을 클릭하여 이메일 인증을 완료해주세요.</p>" +
                 "<p style='text-align: center;'>" +
-                "<a href='" + verificationUrl + "' class='button' style='background-color: #4F46E5; color: #ffffff !important; text-decoration: none; padding: 12px 30px; border-radius: 5px; display: inline-block; font-weight: bold;'>이메일 인증하기</a>" +
+                "<a href='" + verificationUrl
+                + "' class='button' style='background-color: #4F46E5; color: #ffffff !important; text-decoration: none; padding: 12px 30px; border-radius: 5px; display: inline-block; font-weight: bold;'>이메일 인증하기</a>"
+                +
                 "</p>" +
                 "<p>만약 버튼이 작동하지 않는다면, 아래 링크를 복사하여 브라우저에 붙여넣으세요:</p>" +
                 "<p style='word-break: break-all; color: #4F46E5;'>" + verificationUrl + "</p>" +

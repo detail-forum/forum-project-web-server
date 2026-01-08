@@ -12,7 +12,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/chat/direct/rooms")
+@RequestMapping("/chat/direct/rooms")
 @RequiredArgsConstructor
 public class DirectChatController {
 

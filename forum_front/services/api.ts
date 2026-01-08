@@ -617,6 +617,8 @@ export const groupApi = {
 export const directChatApi = {
   // 1대1 채팅방 목록 조회
   getMyRooms: async (): Promise<ApiResponse<import('@/types/api').DirectChatRoomDTO[]>> => {
+    // baseURL이 /api로 끝나므로 /chat/direct/rooms만 사용
+    // nginx가 /api/를 제거하므로 실제 백엔드 경로는 /api/chat/direct/rooms가 됨
     const response = await apiClient.get<ApiResponse<import('@/types/api').DirectChatRoomDTO[]>>('/chat/direct/rooms')
     return response.data
   },
@@ -631,7 +633,6 @@ export const directChatApi = {
 
   // 1대1 채팅 메시지 목록 조회
   getMessages: async (roomId: number, page: number = 0, size: number = 50): Promise<ApiResponse<import('@/types/api').DirectChatMessagePageDTO>> => {
-    // 백엔드 경로: /api/chat/direct/rooms/{roomId}/messages (백엔드에서 경로 수정 필요할 수 있음)
     const response = await apiClient.get<ApiResponse<import('@/types/api').DirectChatMessagePageDTO>>(`/chat/direct/rooms/${roomId}/messages`, {
       params: { page, size },
     })

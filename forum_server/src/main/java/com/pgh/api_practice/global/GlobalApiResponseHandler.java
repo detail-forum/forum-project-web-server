@@ -64,6 +64,13 @@ public class GlobalApiResponseHandler {
         return ResponseEntity.status(401).body(ApiResponse.fail("인증이 필요합니다."));
     }
 
+    // 500: IllegalStateException 처리 (예상치 못한 상태)
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+        ex.printStackTrace(); // 디버깅을 위한 스택 트레이스 출력
+        return ResponseEntity.status(500).body(ApiResponse.fail(ex.getMessage() != null ? ex.getMessage() : "서버 내부 오류가 발생했습니다."));
+    }
+
     // 500: 기타 모든 예외
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {

@@ -93,7 +93,7 @@ public class AuthService {
 
         // 2) 사용자 존재 확인 및 이메일 인증 여부 확인
         Users user = authRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다."));
 
         // 3) 이메일 인증 여부 확인
         if (!user.isEmailVerified()) {

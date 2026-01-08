@@ -12,16 +12,21 @@ import jakarta.mail.internet.MimeMessage;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmailService {
 
     private final JavaMailSender mailSender;
+    private final String fromEmail;
+    private final String baseUrl;
 
-    @Value("${spring.mail.username}")
-    private String fromEmail;
-
-    @Value("${app.base-url:http://localhost:3000}")
-    private String baseUrl;
+    public EmailService(
+            JavaMailSender mailSender,
+            @Value("${spring.mail.username}") String fromEmail,
+            @Value("${app.base-url:http://localhost:3000}") String baseUrl
+    ) {
+        this.mailSender = mailSender;
+        this.fromEmail = fromEmail;
+        this.baseUrl = baseUrl;
+    }
 
     /**
      * 이메일 인증 메일 발송

@@ -10,6 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface NotificationModalProps {
   isOpen: boolean
@@ -206,14 +207,23 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
     }
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
-      <div
-        ref={modalRef}
-        className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4"
+        >
+          <motion.div
+            ref={modalRef}
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="bg-white rounded-lg shadow-xl w-full max-w-2xl h-[600px] overflow-hidden flex flex-col"
+          >
         <div className="flex-shrink-0 border-b border-gray-200">
           <div className="px-6 py-4 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">알림</h2>
@@ -238,42 +248,75 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
           </div>
           {/* 필터 버튼 */}
           <div className="px-6 pb-3 flex items-center space-x-2 overflow-x-auto">
-            {(['ALL', 'POST_LIKE', 'COMMENT_REPLY', 'NEW_FOLLOWER', 'NEW_MESSAGE', 'ADMIN_NOTICE'] as NotificationFilter[]).map((filterType) => (
-              <button
+            {(['ALL', 'POST_LIKE', 'COMMENT_REPLY', 'NEW_FOLLOWER', 'NEW_MESSAGE', 'ADMIN_NOTICE'] as NotificationFilter[]).map((filterType, index) => (
+              <motion.button
                 key={filterType}
                 onClick={() => setFilter(filterType)}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.05, duration: 0.2 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md whitespace-nowrap transition-colors ${
                   filter === filterType
-                    ? 'bg-primary text-white'
+                    ? 'bg-primary text-white shadow-md'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {getFilterLabel(filterType)}
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1" style={{ maxHeight: 'calc(80vh - 140px)' }}>
+        <motion.div
+          className="overflow-y-auto flex-1 h-[460px] notification-scroll"
+          style={{
+            scrollBehavior: 'smooth',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+        >
           {loading ? (
-            <div className="px-6 py-12 text-center text-gray-500">
-              알림을 불러오는 중...
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="px-6 py-12 text-center text-gray-500"
+            >
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="mt-4">알림을 불러오는 중...</p>
+            </motion.div>
           ) : filteredNotifications.length === 0 ? (
-            <div className="px-6 py-12 text-center text-gray-500">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="px-6 py-12 text-center text-gray-500"
+            >
               {filter === 'ALL' ? '알림이 없습니다.' : `${getFilterLabel(filter)} 알림이 없습니다.`}
-            </div>
+            </motion.div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {filteredNotifications.map((notification) => {
-                return (
-                  <div
-                    key={notification.id}
-                    className={`px-6 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      notification.isRead ? 'bg-white' : 'bg-blue-50'
-                    }`}
-                    onClick={() => handleNotificationClick(notification)}
-                  >
+              <AnimatePresence>
+                {filteredNotifications.map((notification, index) => {
+                  return (
+                    <motion.div
+                      key={notification.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{
+                        duration: 0.3,
+                        delay: index * 0.05,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                      className={`px-6 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
+                        notification.isRead ? 'bg-white' : 'bg-blue-50'
+                      }`}
+                      onClick={() => handleNotificationClick(notification)}
+                      whileHover={{ x: 4, transition: { duration: 0.2 } }}
+                    >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start space-x-3 flex-1 min-w-0">
                         <div className="flex-shrink-0 text-xl">
@@ -327,13 +370,16 @@ export default function NotificationModal({ isOpen, onClose }: NotificationModal
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 )
               })}
+              </AnimatePresence>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+        </motion.div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

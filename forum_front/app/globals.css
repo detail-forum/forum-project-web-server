@@ -28,3 +28,33 @@ body {
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
 }
+
+/* 알림창 다이나믹 스크롤바 스타일 */
+.notification-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.notification-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notification-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.notification-scroll::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.2);
+  border-radius: 10px;
+  transition: background 0.3s ease;
+}
+
+.notification-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+.notification-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.2) transparent;
+}

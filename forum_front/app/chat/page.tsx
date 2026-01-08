@@ -9,21 +9,11 @@ import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
+import { directChatApi, groupApi, imageUploadApi, fileUploadApi } from '@/services/api'
+import type { DirectChatRoomDTO, DirectChatMessageDTO, GroupChatRoomDTO, GroupChatMessageDTO } from '@/types/api'
 
-// 타입 정의 (백엔드 개발자가 구현해야 함)
-interface DirectChatRoom {
-  id: number
-  otherUserId: number
-  otherUsername: string
-  otherNickname: string
-  otherProfileImageUrl?: string
-  lastMessage?: string
-  lastMessageTime?: string
-  unreadCount: number
-}
-
-interface GroupChatRoom {
-  id: number
+// 확장된 그룹 채팅방 타입 (그룹 정보 포함)
+interface ExtendedGroupChatRoom extends GroupChatRoomDTO {
   groupId: number
   groupName: string
   roomId: number
@@ -34,19 +24,8 @@ interface GroupChatRoom {
   unreadCount: number
 }
 
-interface ChatMessage {
-  id: number
-  message: string
-  username: string
-  nickname: string
-  displayName?: string
-  profileImageUrl?: string
-  createdTime: string
-  messageType: 'TEXT' | 'IMAGE' | 'FILE'
-  fileUrl?: string
-  fileName?: string
-  fileSize?: number
-}
+// 통합 메시지 타입
+type ChatMessage = DirectChatMessageDTO | GroupChatMessageDTO
 
 type ChatTab = 'direct' | 'group'
 
@@ -57,14 +36,17 @@ export default function ChatPage() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null)
   
   // Direct Chat 관련 상태
-  const [directChatRooms, setDirectChatRooms] = useState<DirectChatRoom[]>([])
+  const [directChatRooms, setDirectChatRooms] = useState<DirectChatRoomDTO[]>([])
   const [selectedDirectChat, setSelectedDirectChat] = useState<number | null>(null)
-  const [directMessages, setDirectMessages] = useState<ChatMessage[]>([])
+  const [directMessages, setDirectMessages] = useState<DirectChatMessageDTO[]>([])
   
   // Group Chat 관련 상태
-  const [groupChatRooms, setGroupChatRooms] = useState<GroupChatRoom[]>([])
+  const [groupChatRooms, setGroupChatRooms] = useState<ExtendedGroupChatRoom[]>([])
   const [selectedGroupChat, setSelectedGroupChat] = useState<{ groupId: number; roomId: number } | null>(null)
-  const [groupMessages, setGroupMessages] = useState<ChatMessage[]>([])
+  const [groupMessages, setGroupMessages] = useState<GroupChatMessageDTO[]>([])
+  
+  // 그룹 목록 (채팅방 조회용)
+  const [myGroups, setMyGroups] = useState<Array<{ id: number; name: string }>>([])
   
   // 공통 상태
   const [newMessage, setNewMessage] = useState('')
@@ -103,6 +85,7 @@ export default function ChatPage() {
     }
   }, [isAuthenticated, currentUsername, currentTab])
 
+
   // 선택된 채팅방의 메시지 로드
   useEffect(() => {
     if (currentTab === 'direct' && selectedDirectChat) {
@@ -123,49 +106,98 @@ export default function ChatPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 1대1 채팅방 목록 조회 (백엔드 API 필요)
+
+  // 1대1 채팅방 목록 조회
   const fetchDirectChatRooms = async () => {
     try {
-      // TODO: 백엔드 API 호출
-      // const response = await chatApi.getDirectChatRooms()
-      // setDirectChatRooms(response.data)
-      setLoading(false)
+      setLoading(true)
+      const response = await directChatApi.getMyRooms()
+      if (response.success && response.data) {
+        setDirectChatRooms(response.data)
+      }
     } catch (error) {
       console.error('1대1 채팅방 목록 조회 실패:', error)
+    } finally {
       setLoading(false)
     }
   }
 
-  // 그룹 채팅방 목록 조회 (백엔드 API 필요)
+  // 그룹 채팅방 목록 조회
   const fetchGroupChatRooms = async () => {
     try {
-      // TODO: 백엔드 API 호출
-      // const response = await chatApi.getGroupChatRooms()
-      // setGroupChatRooms(response.data)
-      setLoading(false)
+      setLoading(true)
+      // 먼저 내 그룹 목록 조회
+      const groupsResponse = await groupApi.getGroupList(0, 100, true)
+      if (!groupsResponse.success || !groupsResponse.data?.content) {
+        setGroupChatRooms([])
+        setLoading(false)
+        return
+      }
+      
+      const groups = groupsResponse.data.content.map((group: any) => ({
+        id: group.id,
+        name: group.name,
+      }))
+      setMyGroups(groups)
+      
+      // 각 그룹의 채팅방 조회
+      const allRooms: ExtendedGroupChatRoom[] = []
+      for (const group of groups) {
+        try {
+          const response = await groupApi.getChatRooms(group.id)
+          if (response.success && response.data) {
+            const rooms = response.data.map((room: GroupChatRoomDTO) => ({
+              ...room,
+              groupId: group.id,
+              groupName: group.name,
+              roomId: room.id,
+              roomName: room.name,
+              roomProfileImageUrl: room.profileImageUrl,
+              lastMessage: undefined, // TODO: 마지막 메시지 정보 추가 필요
+              lastMessageTime: undefined,
+              unreadCount: 0, // TODO: 읽지 않은 메시지 수 추가 필요
+            }))
+            allRooms.push(...rooms)
+          }
+        } catch (error) {
+          console.error(`그룹 ${group.id}의 채팅방 조회 실패:`, error)
+        }
+      }
+      setGroupChatRooms(allRooms)
     } catch (error) {
       console.error('그룹 채팅방 목록 조회 실패:', error)
+    } finally {
       setLoading(false)
     }
   }
 
-  // 1대1 채팅 메시지 조회 (백엔드 API 필요)
+  // 1대1 채팅 메시지 조회
   const fetchDirectMessages = async (chatRoomId: number) => {
     try {
-      // TODO: 백엔드 API 호출
-      // const response = await chatApi.getDirectMessages(chatRoomId)
-      // setDirectMessages(response.data)
+      const response = await directChatApi.getMessages(chatRoomId, 0, 100)
+      if (response.success && response.data) {
+        setDirectMessages(response.data.content || [])
+        // 메시지 로드 후 스크롤 하단으로
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
     } catch (error) {
       console.error('1대1 채팅 메시지 조회 실패:', error)
     }
   }
 
-  // 그룹 채팅 메시지 조회 (기존 API 사용 가능)
+  // 그룹 채팅 메시지 조회
   const fetchGroupMessages = async (groupId: number, roomId: number) => {
     try {
-      // TODO: 기존 groupApi.getChatMessages 사용 또는 새로운 API
-      // const response = await groupApi.getChatMessages(groupId, roomId, 0, 100)
-      // setGroupMessages(response.data)
+      const response = await groupApi.getChatMessages(groupId, roomId, 0, 100)
+      if (response.success && response.data) {
+        setGroupMessages(response.data)
+        // 메시지 로드 후 스크롤 하단으로
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+      }
     } catch (error) {
       console.error('그룹 채팅 메시지 조회 실패:', error)
     }
@@ -179,11 +211,24 @@ export default function ChatPage() {
     try {
       setSending(true)
       if (currentTab === 'direct' && selectedDirectChat) {
-        // TODO: 1대1 채팅 메시지 전송 API
-        // await chatApi.sendDirectMessage(selectedDirectChat, { message: newMessage })
+        const response = await directChatApi.sendMessage(selectedDirectChat, {
+          message: newMessage,
+          messageType: 'TEXT',
+        })
+        if (response.success && response.data) {
+          // 메시지 목록 새로고침
+          await fetchDirectMessages(selectedDirectChat)
+        }
       } else if (currentTab === 'group' && selectedGroupChat) {
-        // TODO: 그룹 채팅 메시지 전송 API (기존 사용 가능)
-        // await groupApi.sendChatMessage(selectedGroupChat.groupId, selectedGroupChat.roomId, { message: newMessage })
+        const response = await groupApi.sendChatMessage(
+          selectedGroupChat.groupId,
+          selectedGroupChat.roomId,
+          { message: newMessage }
+        )
+        if (response.success) {
+          // 메시지 목록 새로고침
+          await fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
+        }
       }
       setNewMessage('')
     } catch (error) {
@@ -196,36 +241,78 @@ export default function ChatPage() {
   // 이미지 업로드
   const handleImageUpload = async (file: File) => {
     try {
-      // TODO: 이미지 업로드 API 호출 후 메시지 전송
-      // const uploadResponse = await imageUploadApi.uploadImage(file)
-      // if (uploadResponse.success) {
-      //   await chatApi.sendDirectMessage(selectedDirectChat, { 
-      //     message: '', 
-      //     messageType: 'IMAGE',
-      //     fileUrl: uploadResponse.data.url 
-      //   })
-      // }
+      setSending(true)
+      const uploadResponse = await imageUploadApi.uploadImage(file)
+      if (uploadResponse.success && uploadResponse.data) {
+        if (currentTab === 'direct' && selectedDirectChat) {
+          const response = await directChatApi.sendMessage(selectedDirectChat, {
+            message: '',
+            messageType: 'IMAGE',
+            fileUrl: uploadResponse.data.url,
+          })
+          if (response.success) {
+            await fetchDirectMessages(selectedDirectChat)
+          }
+        } else if (currentTab === 'group' && selectedGroupChat) {
+          const response = await groupApi.sendChatMessage(
+            selectedGroupChat.groupId,
+            selectedGroupChat.roomId,
+            {
+              message: '',
+              messageType: 'IMAGE',
+              fileUrl: uploadResponse.data.url,
+            }
+          )
+          if (response.success) {
+            await fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
+          }
+        }
+      }
     } catch (error) {
       console.error('이미지 업로드 실패:', error)
+    } finally {
+      setSending(false)
     }
   }
 
   // 파일 업로드
   const handleFileUpload = async (file: File) => {
     try {
-      // TODO: 파일 업로드 API 호출 후 메시지 전송
-      // const uploadResponse = await fileUploadApi.uploadFile(file)
-      // if (uploadResponse.success) {
-      //   await chatApi.sendDirectMessage(selectedDirectChat, { 
-      //     message: '', 
-      //     messageType: 'FILE',
-      //     fileUrl: uploadResponse.data.url,
-      //     fileName: file.name,
-      //     fileSize: file.size
-      //   })
-      // }
+      setSending(true)
+      const uploadResponse = await fileUploadApi.uploadFile(file)
+      if (uploadResponse.success && uploadResponse.data) {
+        if (currentTab === 'direct' && selectedDirectChat) {
+          const response = await directChatApi.sendMessage(selectedDirectChat, {
+            message: '',
+            messageType: 'FILE',
+            fileUrl: uploadResponse.data.url,
+            fileName: file.name,
+            fileSize: file.size,
+          })
+          if (response.success) {
+            await fetchDirectMessages(selectedDirectChat)
+          }
+        } else if (currentTab === 'group' && selectedGroupChat) {
+          const response = await groupApi.sendChatMessage(
+            selectedGroupChat.groupId,
+            selectedGroupChat.roomId,
+            {
+              message: '',
+              messageType: 'FILE',
+              fileUrl: uploadResponse.data.url,
+              fileName: file.name,
+              fileSize: file.size,
+            }
+          )
+          if (response.success) {
+            await fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
+          }
+        }
+      }
     } catch (error) {
       console.error('파일 업로드 실패:', error)
+    } finally {
+      setSending(false)
     }
   }
 
@@ -233,12 +320,12 @@ export default function ChatPage() {
   const handleSearchMessages = async (query: string) => {
     try {
       setSearchQuery(query)
-      // TODO: 백엔드 API 호출
+      // TODO: 백엔드 검색 API 구현 후 연동
       // if (currentTab === 'direct' && selectedDirectChat) {
-      //   const response = await chatApi.searchDirectMessages(selectedDirectChat, query)
+      //   const response = await directChatApi.searchMessages(selectedDirectChat, query)
       //   // 검색 결과 표시
       // } else if (currentTab === 'group' && selectedGroupChat) {
-      //   const response = await chatApi.searchGroupMessages(
+      //   const response = await groupApi.searchChatMessages(
       //     selectedGroupChat.groupId, 
       //     selectedGroupChat.roomId, 
       //     query
@@ -272,6 +359,13 @@ export default function ChatPage() {
   const currentChatRoom = currentTab === 'direct' 
     ? directChatRooms.find(room => room.id === selectedDirectChat)
     : groupChatRooms.find(room => room.groupId === selectedGroupChat?.groupId && room.roomId === selectedGroupChat?.roomId)
+  
+  // 메시지 스크롤 하단으로
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [directMessages, groupMessages])
 
   // 필터링된 채팅방 목록
   const filteredDirectRooms = directChatRooms.filter(room =>
@@ -285,8 +379,10 @@ export default function ChatPage() {
     room.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  // 현재 메시지 목록
-  const currentMessages = currentTab === 'direct' ? directMessages : groupMessages
+  // 현재 메시지 목록 (타입 변환)
+  const currentMessages: Array<DirectChatMessageDTO | GroupChatMessageDTO> = currentTab === 'direct' 
+    ? directMessages 
+    : groupMessages
 
   if (!isAuthenticated) {
     return (
@@ -475,6 +571,11 @@ export default function ChatPage() {
                               {format(new Date(room.lastMessageTime), 'MM/dd HH:mm', { locale: ko })}
                             </p>
                           )}
+                          {room.createdTime && !room.lastMessageTime && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {format(new Date(room.createdTime), 'MM/dd HH:mm', { locale: ko })}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -609,6 +710,7 @@ export default function ChatPage() {
                   <>
                     {currentMessages.map((message) => {
                       const isMyMessage = currentUsername === message.username
+                      const displayName = 'displayName' in message ? message.displayName : undefined
                       return (
                         <div
                           key={message.id}
@@ -632,7 +734,7 @@ export default function ChatPage() {
                           <div className={`flex-1 ${isMyMessage ? 'flex flex-col items-end' : ''}`}>
                             <div className={`flex items-baseline gap-2 mb-1 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
                               <span className="font-semibold text-sm text-gray-800">
-                                {message.displayName || message.nickname}
+                                {displayName || message.nickname}
                               </span>
                               <span className="text-xs text-gray-500">
                                 {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}

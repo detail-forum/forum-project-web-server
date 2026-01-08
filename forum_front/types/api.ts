@@ -287,6 +287,49 @@ export interface CreateGroupChatMessageDTO {
   fileSize?: number  // 파일 크기 (바이트, 파일 타입일 때만)
 }
 
+// Direct Chat 관련 타입
+export interface DirectChatRoomDTO {
+  id: number
+  otherUserId: number
+  otherUsername: string
+  otherNickname: string
+  otherProfileImageUrl?: string
+  lastMessage?: string
+  lastMessageTime?: string
+  unreadCount: number
+  updatedTime?: string
+}
+
+export interface DirectChatMessageDTO {
+  id: number
+  roomId: number
+  senderId: number
+  username: string
+  nickname: string
+  profileImageUrl?: string
+  message: string
+  createdTime: string
+  messageType: 'TEXT' | 'IMAGE' | 'FILE'
+  fileUrl?: string
+  fileName?: string
+  fileSize?: number
+  isRead: boolean
+}
+
+export interface DirectChatMessagePageDTO {
+  content: DirectChatMessageDTO[]
+  totalElements: number
+  totalPages: number
+}
+
+export interface CreateDirectMessageDTO {
+  message?: string
+  messageType?: 'TEXT' | 'IMAGE' | 'FILE'
+  fileUrl?: string
+  fileName?: string
+  fileSize?: number
+}
+
 // Notification 관련 타입
 export type NotificationType = 'ADMIN_NOTICE' | 'NEW_FOLLOWER' | 'NEW_MESSAGE' | 'POST_LIKE' | 'COMMENT_REPLY'
 

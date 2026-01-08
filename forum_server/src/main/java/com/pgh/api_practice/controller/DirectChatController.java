@@ -38,7 +38,8 @@ public class DirectChatController {
         );
     }
 
-    @GetMapping("/api/chat/direct/rooms/{roomId}/messages")
+    /** 1대1 채팅 메시지 목록 조회 */
+    @GetMapping("/{roomId}/messages")
     public ResponseEntity<ApiResponse<DirectChatMessagePageDTO>> getMessages(
             @PathVariable Long roomId,
             @RequestParam(defaultValue = "0") int page,

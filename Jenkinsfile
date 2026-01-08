@@ -49,9 +49,10 @@ pipeline {
                         Write-Host ""
                         
                         Write-Host "Installing dependencies..." -ForegroundColor Yellow
-                        npm ci --legacy-peer-deps
+                        Write-Host "Updating package-lock.json..." -ForegroundColor Cyan
+                        npm install --legacy-peer-deps
                         if ($LASTEXITCODE -ne 0) {
-                            Write-Host "[ERROR] npm ci failed!" -ForegroundColor Red
+                            Write-Host "[ERROR] npm install failed!" -ForegroundColor Red
                             exit 1
                         }
                         Write-Host ""

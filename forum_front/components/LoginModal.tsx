@@ -57,22 +57,12 @@ export default function LoginModal({ isOpen = true, onClose, onLoginSuccess }: L
           email: formData.email,
         })
         if (response.success) {
-          // 회원가입 성공 후 자동 로그인
-          const loginResponse = await authApi.login({
-            username: formData.username,
-            password: formData.password,
-          })
-          if (loginResponse.success && loginResponse.data) {
-            dispatch(setCredentials({
-              accessToken: loginResponse.data.accessToken,
-              refreshToken: loginResponse.data.refreshToken,
-            }))
-            onClose()
-            if (onLoginSuccess) {
-              onLoginSuccess()
-            }
-            router.refresh()
-          }
+          // 회원가입 성공 - 이메일 인증 안내 모달 표시
+          setError('')
+          setIsLogin(true) // 로그인 모드로 전환
+          setFormData({ username: '', password: '', nickname: '', email: '' })
+          // 이메일 인증 안내 모달 표시
+          alert('회원가입이 완료되었습니다!\n\n이메일을 확인하여 인증을 완료해주세요.\n인증이 완료되면 로그인하실 수 있습니다.')
         }
       }
     } catch (err: any) {

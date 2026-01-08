@@ -28,7 +28,7 @@ public class AuthController {
             @Valid @RequestBody RegisterRequestDTO registerRequestDTO
     ) {
         authService.register(registerRequestDTO);
-        return ResponseEntity.ok(ApiResponse.ok("회원가입이 완료되었습니다."));
+        return ResponseEntity.ok(ApiResponse.ok("회원가입이 완료되었습니다. 이메일을 확인하여 인증을 완료해주세요."));
     }
 
     @PostMapping("/login")
@@ -188,6 +188,20 @@ public class AuthController {
         response.addCookie(refreshTokenCookie);
         
         return ResponseEntity.ok(ApiResponse.ok("로그아웃 성공"));
+    }
+
+    /** ✅ 이메일 인증 처리 */
+    @GetMapping("/verify-email")
+    public ResponseEntity<ApiResponse<Void>> verifyEmail(@RequestParam String token) {
+        authService.verifyEmail(token);
+        return ResponseEntity.ok(ApiResponse.ok("이메일 인증이 완료되었습니다."));
+    }
+
+    /** ✅ 이메일 인증 메일 재발송 */
+    @PostMapping("/resend-verification")
+    public ResponseEntity<ApiResponse<Void>> resendVerificationEmail(@RequestParam String email) {
+        authService.resendVerificationEmail(email);
+        return ResponseEntity.ok(ApiResponse.ok("인증 메일이 재발송되었습니다."));
     }
 }
 

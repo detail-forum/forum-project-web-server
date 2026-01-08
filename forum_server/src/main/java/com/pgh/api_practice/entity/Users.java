@@ -43,6 +43,13 @@
         @Column(name = "github_link", length = 500)
         private String githubLink;
 
+        @Builder.Default
+        @Column(name = "email_verified", nullable = false)
+        private boolean emailVerified = false;
+
+        @Column(name = "email_verification_token", length = 255)
+        private String emailVerificationToken;
+
         @CreatedDate
         @Column(name = "created_datetime", nullable = false, updatable = false)
         private LocalDateTime createdDate;

@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @AllArgsConstructor
 @Service
@@ -36,8 +37,10 @@ public class AuthService {
     private final TokenProvider tokenProvider;
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final EmailService emailService;
 
     // 회원가입
+    @Transactional
     public void register(RegisterRequestDTO dto) {
         // 아이디 중복 검증
         if (authRepository.existsByUsername(dto.getUsername())) {
@@ -54,17 +57,32 @@ public class AuthService {
             throw new UserAlreadyExistException("이미 사용 중인 닉네임입니다.");
         }
 
+        // 이메일 인증 토큰 생성
+        String verificationToken = UUID.randomUUID().toString();
+
         Users user = Users.builder()
                 .username(dto.getUsername())
                 .email(dto.getEmail())
                 .nickname(dto.getNickname())
                 .password(passwordEncoder.encode(dto.getPassword())) // 비밀번호 인코딩
+                .emailVerified(false) // 이메일 미인증 상태로 시작
+                .emailVerificationToken(verificationToken)
                 .build();
 
         authRepository.save(user);
+
+        // 이메일 인증 메일 발송
+        try {
+            emailService.sendVerificationEmail(dto.getEmail(), dto.getUsername(), verificationToken);
+        } catch (Exception e) {
+            // 이메일 발송 실패해도 회원가입은 완료 (나중에 재발송 가능)
+            // 로그만 남기고 계속 진행
+            System.err.println("이메일 발송 실패: " + e.getMessage());
+        }
     }
 
     // 로그인
+    @Transactional
     public LoginResponseDTO login(LoginRequestDTO dto) {
         // 1) 인증
         Authentication authentication = authenticationManager.authenticate(
@@ -73,13 +91,18 @@ public class AuthService {
 
         String username = authentication.getName();
 
-        // 2) 토큰 생성
+        // 2) 사용자 존재 확인 및 이메일 인증 여부 확인
+        Users user = authRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+
+        // 3) 이메일 인증 여부 확인
+        if (!user.isEmailVerified()) {
+            throw new ApplicationUnauthorizedException("이메일 인증이 완료되지 않았습니다. 이메일을 확인해주세요.");
+        }
+
+        // 4) 토큰 생성
         String accessToken  = tokenProvider.createAccessToken(username);
         String refreshToken = tokenProvider.createRefreshToken(username);
-
-        // 3) 사용자 존재 확인
-        authRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
         // 5) 신규 RT 저장
         RefreshToken rt = RefreshToken.builder()
@@ -87,7 +110,6 @@ public class AuthService {
                 .expiryDateTime(LocalDateTime.now().plusDays(7))
                 .build();
         refreshTokenRepository.save(rt);
-
 
         return new LoginResponseDTO(accessToken, refreshToken);
     }
@@ -207,6 +229,41 @@ public class AuthService {
         
         // 모든 리프레시 토큰 삭제
         // (선택적 - 보안을 위해)
+    }
+
+    /** ✅ 이메일 인증 처리 */
+    @Transactional
+    public void verifyEmail(String token) {
+        Users user = authRepository.findByEmailVerificationToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("유효하지 않은 인증 토큰입니다."));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalArgumentException("이미 인증된 이메일입니다.");
+        }
+
+        // 이메일 인증 완료
+        user.setEmailVerified(true);
+        user.setEmailVerificationToken(null); // 토큰 제거 (일회용)
+        authRepository.save(user);
+    }
+
+    /** ✅ 이메일 인증 메일 재발송 */
+    @Transactional
+    public void resendVerificationEmail(String email) {
+        Users user = authRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("해당 이메일로 가입된 계정을 찾을 수 없습니다."));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalArgumentException("이미 인증된 이메일입니다.");
+        }
+
+        // 새 인증 토큰 생성
+        String verificationToken = UUID.randomUUID().toString();
+        user.setEmailVerificationToken(verificationToken);
+        authRepository.save(user);
+
+        // 이메일 재발송
+        emailService.sendVerificationEmail(user.getEmail(), user.getUsername(), verificationToken);
     }
 
 }

@@ -267,6 +267,16 @@ export const authApi = {
   register: (data: RegisterRequest) =>
     apiClient.post<ApiResponse<void>>('/auth/register', data).then(r => r.data),
 
+  verifyEmail: async (token: string): Promise<ApiResponse<void>> => {
+    const response = await apiClient.get<ApiResponse<void>>(`/auth/verify-email?token=${encodeURIComponent(token)}`)
+    return response.data
+  },
+
+  resendVerificationEmail: async (email: string): Promise<ApiResponse<void>> => {
+    const response = await apiClient.post<ApiResponse<void>>(`/auth/resend-verification?email=${encodeURIComponent(email)}`)
+    return response.data
+  },
+
   refreshToken: (data: RefreshTokenRequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/auth/refresh', data).then(r => r.data),
   

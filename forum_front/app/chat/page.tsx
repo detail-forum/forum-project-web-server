@@ -989,10 +989,10 @@ useEffect(() => {
                                   </p>
                                 )}
                               </div>
-                              {/* 읽음 표시 - 일반 채팅만 (1대1이므로 상대방이 읽었으면 표시) */}
-                              {currentTab === 'direct' && isMyMessage && 'isRead' in message && (
+                              {/* 읽음 표시 - 일반 채팅만 (읽었을 때만 ✓ 표시) */}
+                              {currentTab === 'direct' && isMyMessage && 'isRead' in message && message.isRead && (
                                 <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">
-                                  {message.isRead ? '✓✓' : '✓'}
+                                  ✓
                                 </span>
                               )}
                             </div>

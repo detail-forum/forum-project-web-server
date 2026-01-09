@@ -216,13 +216,24 @@ public class DirectChatService {
                         : null;
 
         Long otherUserId = room.getOtherUserId(me.getId());
+        
+        // 상대방의 읽음 상태 조회
+        DirectChatReadStatus otherReadStatus =
+                readStatusRepository.findByChatRoomAndUserId(room, otherUserId)
+                        .orElse(null);
+        
+        Long otherLastReadMessageId =
+                (otherReadStatus != null && otherReadStatus.getLastReadMessage() != null)
+                        ? otherReadStatus.getLastReadMessage().getId()
+                        : null;
 
         List<DirectChatMessageDTO> content = pageResult
                 .map(message ->
                         toMessageDTO(
                                 message,
                                 me.getId(),
-                                myLastReadMessageId
+                                myLastReadMessageId,
+                                otherLastReadMessageId
                         )
                 )
                 .getContent();
@@ -237,7 +248,8 @@ public class DirectChatService {
     private DirectChatMessageDTO toMessageDTO(
             DirectChatMessage message,
             Long myUserId,
-            Long myLastReadMessageId
+            Long myLastReadMessageId,
+            Long otherLastReadMessageId
     ) {
         Users sender = userRepository.findById(message.getSenderId())
                 .orElseThrow(() -> new ResourceNotFoundException("발신자를 찾을 수 없습니다: " + message.getSenderId()));
@@ -245,8 +257,11 @@ public class DirectChatService {
         boolean isRead;
 
         if (message.getSenderId().equals(myUserId)) {
-            isRead = true;
+            // 내가 보낸 메시지: 상대방이 읽었는지 확인
+            isRead = otherLastReadMessageId != null
+                    && otherLastReadMessageId >= message.getId();
         } else {
+            // 상대가 보낸 메시지: 내가 읽었는지 확인
             isRead = myLastReadMessageId != null
                     && myLastReadMessageId >= message.getId();
         }
@@ -310,12 +325,28 @@ public class DirectChatService {
 
         publishToWebSocket(saved);
 
-        return toMessageDTOForSend(saved);
+        return toMessageDTOForSend(saved, me.getId());
     }
 
-    private DirectChatMessageDTO toMessageDTOForSend(DirectChatMessage message) {
+    private DirectChatMessageDTO toMessageDTOForSend(DirectChatMessage message, Long myUserId) {
         Users sender = userRepository.findById(message.getSenderId())
                 .orElseThrow(() -> new ResourceNotFoundException("발신자를 찾을 수 없습니다: " + message.getSenderId()));
+
+        // 상대방의 읽음 상태 확인
+        DirectChatRoom room = message.getChatRoom();
+        Long otherUserId = room.getOtherUserId(myUserId);
+        DirectChatReadStatus otherReadStatus =
+                readStatusRepository.findByChatRoomAndUserId(room, otherUserId)
+                        .orElse(null);
+        
+        Long otherLastReadMessageId =
+                (otherReadStatus != null && otherReadStatus.getLastReadMessage() != null)
+                        ? otherReadStatus.getLastReadMessage().getId()
+                        : null;
+        
+        // 상대방이 이미 읽었는지 확인
+        boolean isRead = otherLastReadMessageId != null
+                && otherLastReadMessageId >= message.getId();
 
         return DirectChatMessageDTO.builder()
                 .id(message.getId())
@@ -330,7 +361,7 @@ public class DirectChatService {
                 .fileUrl(message.getFileUrl())
                 .fileName(message.getFileName())
                 .fileSize(message.getFileSize())
-                .isRead(true)
+                .isRead(isRead) // 상대방의 읽음 상태 확인
                 .build();
     }
 
@@ -428,7 +459,22 @@ public class DirectChatService {
         readStatus.updateRead(saved);
         readStatusRepository.save(readStatus);
 
-        // DTO 반환 (isRead는 false로 설정 - 상대방이 아직 읽지 않았음)
+        // 상대방의 읽음 상태 확인
+        Long otherUserId = room.getOtherUserId(me.getId());
+        DirectChatReadStatus otherReadStatus =
+                readStatusRepository.findByChatRoomAndUserId(room, otherUserId)
+                        .orElse(null);
+        
+        Long otherLastReadMessageId =
+                (otherReadStatus != null && otherReadStatus.getLastReadMessage() != null)
+                        ? otherReadStatus.getLastReadMessage().getId()
+                        : null;
+        
+        // 상대방이 이미 읽었는지 확인
+        boolean isRead = otherLastReadMessageId != null
+                && otherLastReadMessageId >= saved.getId();
+
+        // DTO 반환
         Users sender = userRepository.findById(saved.getSenderId())
                 .orElseThrow(() -> new ResourceNotFoundException("발신자를 찾을 수 없습니다: " + saved.getSenderId()));
 
@@ -445,7 +491,7 @@ public class DirectChatService {
                 .fileUrl(saved.getFileUrl())
                 .fileName(saved.getFileName())
                 .fileSize(saved.getFileSize())
-                .isRead(false) // 상대방이 아직 읽지 않았으므로 false
+                .isRead(isRead) // 상대방의 읽음 상태 확인
                 .build();
     }
 

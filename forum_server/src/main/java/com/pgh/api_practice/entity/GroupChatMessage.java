@@ -44,10 +44,6 @@ public class GroupChatMessage {
     @CreatedDate
     private LocalDateTime createdTime;
 
-    @Builder.Default
-    @Column(name = "read_count", nullable = false)
-    private int readCount = 0;
-
     public void setDeleted(boolean deleted) {
         this.isDeleted = deleted;
     }

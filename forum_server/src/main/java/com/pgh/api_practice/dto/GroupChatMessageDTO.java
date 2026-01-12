@@ -22,7 +22,6 @@ public class GroupChatMessageDTO {
     private boolean isAdmin;
     
     private LocalDateTime createdTime;
-    private int readCount;
     
     private Long replyToMessageId;  // 답장한 메시지 ID
     private ReplyToMessageInfo replyToMessage;  // 답장한 메시지 정보

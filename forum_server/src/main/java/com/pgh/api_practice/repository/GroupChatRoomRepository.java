@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface GroupChatRoomRepository extends JpaRepository<GroupChatRoom, Long> {
     Optional<GroupChatRoom> findByIdAndIsDeletedFalse(Long id);
     List<GroupChatRoom> findByGroupIdAndIsDeletedFalseOrderByCreatedTimeAsc(Long groupId);
+    List<GroupChatRoom> findByGroupIdInAndIsDeletedFalse(List<Long> groupIds);
 }

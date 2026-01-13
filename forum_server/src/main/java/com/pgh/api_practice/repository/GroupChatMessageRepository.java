@@ -53,4 +53,19 @@ public interface GroupChatMessageRepository extends JpaRepository<GroupChatMessa
             @Param("userId") Long userId,
             @Param("lastReadMessageId") Long lastReadMessageId
     );
+
+    @Query("""
+        SELECT m
+        FROM GroupChatMessage m
+        WHERE m.chatRoom.id = :chatRoomId
+          AND m.isDeleted = false
+          AND m.message IS NOT NULL
+          AND m.message LIKE %:query%
+        ORDER BY m.createdTime DESC
+    """)
+    Page<GroupChatMessage> searchInRoom(
+            @Param("chatRoomId") Long chatRoomId,
+            @Param("query") String query,
+            Pageable pageable
+    );
 }

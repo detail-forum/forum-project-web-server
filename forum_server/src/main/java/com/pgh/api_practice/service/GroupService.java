@@ -727,11 +727,36 @@ public class GroupService {
             }
         }
 
+        MessageType type =
+                dto.getMessageType() != null ? dto.getMessageType() : MessageType.TEXT;
+
+        switch (type) {
+            case TEXT -> {
+                if (dto.getMessage() == null || dto.getMessage().trim().isEmpty()) {
+                    throw new ApplicationBadRequestException("TEXT 메시지는 message가 필수입니다.");
+                }
+            }
+            case IMAGE -> {
+                if (dto.getFileUrl() == null || dto.getFileUrl().isBlank()) {
+                    throw new ApplicationBadRequestException("IMAGE 메시지는 fileUrl이 필수입니다.");
+                }
+            }
+            case FILE -> {
+                if (dto.getFileUrl() == null || dto.getFileName() == null || dto.getFileSize() == null) {
+                    throw new ApplicationBadRequestException("FILE 메시지는 fileUrl, fileName, fileSize가 필수입니다.");
+                }
+            }
+        }
+
         return groupChatMessageRepository.save(
                 GroupChatMessage.builder()
                         .chatRoom(room)
                         .user(user)
                         .message(dto.getMessage())
+                        .messageType(type)
+                        .fileUrl(dto.getFileUrl())
+                        .fileName(dto.getFileName())
+                        .fileSize(dto.getFileSize())
                         .replyToMessage(reply)
                         .build()
         ).getId();
@@ -862,6 +887,10 @@ public class GroupService {
             return GroupChatMessageDTO.builder()
                     .id(msg.getId())
                     .message(msg.getMessage())
+                    .messageType(msg.getMessageType())
+                    .fileUrl(msg.getFileUrl())
+                    .fileName(msg.getFileName())
+                    .fileSize(msg.getFileSize())
                     .username(user.getUsername())
                     .nickname(user.getNickname())
                     .displayName(displayNameMap.get(user.getId()))

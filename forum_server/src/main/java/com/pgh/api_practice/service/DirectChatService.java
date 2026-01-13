@@ -298,32 +298,8 @@ public class DirectChatService {
             throw new ResourceNotFoundException("채팅방 접근 권한이 없습니다.");
         }
 
-        validateByType(dto);
-
-        DirectChatMessage message = new DirectChatMessage(
-                room,
-                me.getId(),
-                dto.getMessage(),
-                DirectChatMessage.MessageType.valueOf(dto.getMessageType().name()),
-                dto.getFileUrl(),
-                dto.getFileName(),
-                dto.getFileSize()
-        );
-
-        DirectChatMessage saved = messageRepository.save(message);
-
-        DirectChatReadStatus readStatus = readStatusRepository
-                .findByChatRoomAndUserId(room, me.getId())
-                .orElseGet(() ->
-                        readStatusRepository.save(
-                                new DirectChatReadStatus(room, me.getId())
-                        )
-                );
-
-        readStatus.updateRead(saved);
-        readStatusRepository.save(readStatus);
-
-        publishToWebSocket(saved);
+        DirectChatMessage saved =
+                createAndSaveMessage(room, me, dto);
 
         return toMessageDTOForSend(saved, me.getId());
     }
@@ -391,108 +367,32 @@ public class DirectChatService {
         }
     }
 
-    private void validateCreateMessage(CreateDirectMessageDTO dto) {
-        switch (dto.getMessageType()) {
-            case IMAGE -> {
-                if (dto.getFileUrl() == null)
-                    throw new IllegalArgumentException("IMAGE 타입은 fileUrl이 필요합니다.");
-            }
-            case FILE -> {
-                if (dto.getFileUrl() == null
-                        || dto.getFileName() == null
-                        || dto.getFileSize() == null)
-                    throw new IllegalArgumentException("FILE 타입은 fileUrl, fileName, fileSize가 필요합니다.");
-            }
-            case TEXT -> {
-                // message만 있으면 OK
-            }
-        }
-    }
-
-    // WebSocket 전송 (WebSocket 엔드포인트에서 직접 처리하므로 빈 메서드)
-    private void publishToWebSocket(DirectChatMessage message) {
-        // WebSocket 메시지 전송은 WebSocketChatController에서 처리
-        // REST API를 통한 메시지 전송 시에는 WebSocket으로 브로드캐스트하지 않음
-        // (이미 저장된 메시지가 프론트엔드에서 자동으로 조회됨)
-    }
-
     /** WebSocket을 통해 메시지 전송 (WebSocket 엔드포인트에서 호출) */
     @Transactional
-    public DirectChatMessageDTO sendMessageViaWebSocket(Long chatRoomId, String messageText, String username) {
+    public DirectChatMessageDTO sendMessageViaWebSocket(
+            Long chatRoomId,
+            String messageText,
+            String username
+    ) {
         Users me = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다: " + username));
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
                 .orElseThrow(() -> new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId));
 
-        // 멤버 검증
         if (!room.getUser1Id().equals(me.getId())
                 && !room.getUser2Id().equals(me.getId())) {
             throw new ResourceNotFoundException("채팅방 접근 권한이 없습니다.");
         }
 
-        if (messageText == null || messageText.trim().isEmpty()) {
-            throw new IllegalArgumentException("메시지는 필수입니다.");
-        }
+        CreateDirectMessageDTO dto = new CreateDirectMessageDTO();
+        dto.setMessageType(CreateDirectMessageDTO.MessageType.TEXT);
+        dto.setMessage(messageText);
 
-        DirectChatMessage message = new DirectChatMessage(
-                room,
-                me.getId(),
-                messageText.trim(),
-                DirectChatMessage.MessageType.TEXT,
-                null,
-                null,
-                null
-        );
+        DirectChatMessage saved =
+                createAndSaveMessage(room, me, dto);
 
-        DirectChatMessage saved = messageRepository.save(message);
-
-        // 본인의 읽음 상태 업데이트 (보낸 사람은 자동으로 읽음 처리)
-        DirectChatReadStatus readStatus = readStatusRepository
-                .findByChatRoomAndUserId(room, me.getId())
-                .orElseGet(() ->
-                        readStatusRepository.save(
-                                new DirectChatReadStatus(room, me.getId())
-                        )
-                );
-
-        readStatus.updateRead(saved);
-        readStatusRepository.save(readStatus);
-
-        // 상대방의 읽음 상태 확인
-        Long otherUserId = room.getOtherUserId(me.getId());
-        DirectChatReadStatus otherReadStatus =
-                readStatusRepository.findByChatRoomAndUserId(room, otherUserId)
-                        .orElse(null);
-        
-        Long otherLastReadMessageId =
-                (otherReadStatus != null && otherReadStatus.getLastReadMessage() != null)
-                        ? otherReadStatus.getLastReadMessage().getId()
-                        : null;
-        
-        // 상대방이 이미 읽었는지 확인
-        boolean isRead = otherLastReadMessageId != null
-                && otherLastReadMessageId >= saved.getId();
-
-        // DTO 반환
-        Users sender = userRepository.findById(saved.getSenderId())
-                .orElseThrow(() -> new ResourceNotFoundException("발신자를 찾을 수 없습니다: " + saved.getSenderId()));
-
-        return DirectChatMessageDTO.builder()
-                .id(saved.getId())
-                .roomId(saved.getChatRoom().getId())
-                .senderId(sender.getId())
-                .username(sender.getUsername())
-                .nickname(sender.getNickname())
-                .profileImageUrl(sender.getProfileImageUrl())
-                .message(saved.getMessage())
-                .createdTime(saved.getCreatedTime())
-                .messageType(saved.getMessageType())
-                .fileUrl(saved.getFileUrl())
-                .fileName(saved.getFileName())
-                .fileSize(saved.getFileSize())
-                .isRead(isRead) // 상대방의 읽음 상태 확인
-                .build();
+        return toMessageDTOForSend(saved, me.getId());
     }
 
     /** 일반 채팅 메시지 읽음 처리 */
@@ -527,5 +427,38 @@ public class DirectChatService {
             readStatus.updateRead(message);
             readStatusRepository.save(readStatus);
         }
+    }
+
+    private DirectChatMessage createAndSaveMessage(
+            DirectChatRoom room,
+            Users sender,
+            CreateDirectMessageDTO dto
+    ) {
+        validateByType(dto);
+
+        DirectChatMessage message = new DirectChatMessage(
+                room,
+                sender.getId(),
+                dto.getMessage(),
+                DirectChatMessage.MessageType.valueOf(dto.getMessageType().name()),
+                dto.getFileUrl(),
+                dto.getFileName(),
+                dto.getFileSize()
+        );
+
+        DirectChatMessage saved = messageRepository.save(message);
+
+        DirectChatReadStatus readStatus = readStatusRepository
+                .findByChatRoomAndUserId(room, sender.getId())
+                .orElseGet(() ->
+                        readStatusRepository.save(
+                                new DirectChatReadStatus(room, sender.getId())
+                        )
+                );
+
+        readStatus.updateRead(saved);
+        readStatusRepository.save(readStatus);
+
+        return saved;
     }
 }

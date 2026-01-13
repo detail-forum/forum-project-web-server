@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,7 +19,9 @@ public class DirectChatController {
 
     private final DirectChatService directChatService;
 
-    /** 1대1 채팅방 목록 조회 */
+    /**
+     * 1대1 채팅방 목록 조회
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<List<DirectChatRoomDTO>>> getMyRooms() {
         try {
@@ -34,7 +37,9 @@ public class DirectChatController {
         }
     }
 
-    /** 1대1 채팅방 생성 또는 조회 */
+    /**
+     * 1대1 채팅방 생성 또는 조회
+     */
     @PostMapping
     public ResponseEntity<ApiResponse<DirectChatRoomDTO>> getOrCreateRoom(
             @RequestBody DirectChatRoomDTO request
@@ -58,13 +63,20 @@ public class DirectChatController {
         }
     }
 
-    /** 1대1 채팅 메시지 목록 조회 */
+    /**
+     * 1대1 채팅 메시지 목록 조회
+     */
     @GetMapping("/{roomId}/messages")
     public ResponseEntity<ApiResponse<DirectChatMessagePageDTO>> getMessages(
             @PathVariable Long roomId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
+                String username =
+                SecurityContextHolder.getContext()
+                        .getAuthentication()
+                        .getName();
+
         DirectChatMessagePageDTO data =
                 directChatService.getMessages(roomId, page, size);
 
@@ -79,11 +91,33 @@ public class DirectChatController {
             @PathVariable Long chatRoomId,
             @RequestBody CreateDirectMessageDTO request
     ) {
+        String username =
+                SecurityContextHolder.getContext()
+                        .getAuthentication()
+                        .getName();
+
         DirectChatMessageDTO dto =
                 directChatService.sendMessage(chatRoomId, request);
 
         return ResponseEntity.ok(
                 ApiResponse.ok(dto, "메시지 전송 성공")
         );
+    }
+
+    @PostMapping("/direct/rooms/{chatRoomId}/read")
+    public ApiResponse<Void> updateDirectChatReadStatus(
+            @PathVariable Long chatRoomId,
+            @RequestBody UpdateReadStatusDTO dto
+    ) {
+        if (dto.getMessageId() == null) {
+            throw new IllegalArgumentException("messageId는 필수입니다.");
+        }
+
+        directChatService.markMessageAsRead(
+                dto.getMessageId(),
+                SecurityContextHolder.getContext().getAuthentication().getName()
+        );
+
+        return ApiResponse.ok(null, "읽음 상태 업데이트 성공");
     }
 }

@@ -13,29 +13,15 @@ import java.util.Optional;
 public interface DirectChatMessageRepository
         extends JpaRepository<DirectChatMessage, Long> {
 
-    /**
-     * 채팅방 마지막 메시지 1건
-     * (채팅방 목록에서 사용)
-     */
     Optional<DirectChatMessage> findTopByChatRoomOrderByCreatedTimeDesc(
             DirectChatRoom chatRoom
     );
 
-    /**
-     * 채팅방 메시지 목록 (페이징, 최신순)
-     */
     Page<DirectChatMessage> findByChatRoomOrderByCreatedTimeDesc(
             DirectChatRoom chatRoom,
             Pageable pageable
     );
 
-    /**
-     * 안 읽은 메시지 수 (read_status 기준)
-     *
-     * unread =
-     *  sender_id != :userId
-     *  AND (lastReadMessageId IS NULL OR m.id > lastReadMessageId)
-     */
     @Query("""
         select count(m)
         from DirectChatMessage m
@@ -51,5 +37,20 @@ public interface DirectChatMessageRepository
             @Param("room") DirectChatRoom room,
             @Param("userId") Long userId,
             @Param("lastReadMessageId") Long lastReadMessageId
+    );
+
+    @Query("""
+        SELECT m
+        FROM DirectChatMessage m
+        WHERE m.chatRoom.id = :chatRoomId
+          AND m.isDeleted = false
+          AND m.message IS NOT NULL
+          AND m.message LIKE %:query%
+        ORDER BY m.createdTime DESC
+    """)
+    Page<DirectChatMessage> searchInRoom(
+            @Param("chatRoomId") Long chatRoomId,
+            @Param("query") String query,
+            Pageable pageable
     );
 }

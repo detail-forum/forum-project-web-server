@@ -341,6 +341,33 @@ public class DirectChatService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public int getReadCount(Long messageId) {
+        DirectChatMessage message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("메시지를 찾을 수 없습니다."));
+
+        DirectChatRoom room = message.getChatRoom();
+
+        // 1대1 채팅이므로, 상대방 1명이 읽었는지만 판단
+        Long senderId = message.getSenderId();
+
+        // sender가 아닌 다른 한 명
+        Long otherUserId =
+                room.getUser1Id().equals(senderId)
+                        ? room.getUser2Id()
+                        : room.getUser1Id();
+
+        DirectChatReadStatus readStatus =
+                readStatusRepository.findByChatRoomAndUserId(room, otherUserId)
+                        .orElse(null);
+
+        if (readStatus == null || readStatus.getLastReadMessage() == null) {
+            return 0;
+        }
+
+        return readStatus.getLastReadMessage().getId() >= messageId ? 1 : 0;
+    }
+
     private void validateByType(CreateDirectMessageDTO req) {
         if (req.getMessageType() == null) {
             throw new IllegalArgumentException("messageType은 필수입니다.");

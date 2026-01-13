@@ -33,20 +33,23 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             return message;
         }
 
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+        StompCommand command = accessor.getCommand();
+        log.debug("STOMP COMMAND = {}", command);
 
-            String auth = accessor.getFirstNativeHeader("Authorization");
+        if (StompCommand.CONNECT.equals(command)) {
 
-            if (auth == null || !auth.startsWith("Bearer ")) {
-                log.warn("STOMP CONNECT 실패: Authorization 헤더 없음");
-                return message;
+            String authHeader = accessor.getFirstNativeHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                log.error("STOMP CONNECT 실패: Authorization 헤더 없음");
+                throw new IllegalArgumentException("WebSocket Authorization 헤더가 없습니다.");
             }
 
-            String token = auth.substring(7);
+            String token = authHeader.substring(7);
 
             if (!tokenProvider.validateToken(token)) {
-                log.warn("STOMP CONNECT 실패: 토큰 유효하지 않음");
-                return message;
+                log.error("STOMP CONNECT 실패: 토큰 유효하지 않음");
+                throw new IllegalArgumentException("WebSocket 토큰이 유효하지 않습니다.");
             }
 
             String username = tokenProvider.getUsername(token);

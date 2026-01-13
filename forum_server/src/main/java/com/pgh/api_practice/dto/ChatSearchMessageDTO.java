@@ -1,0 +1,20 @@
+package com.pgh.api_practice.dto;
+
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class ChatSearchMessageDTO {
+
+    private Long id;
+    private String message;
+    private String username;
+    private String nickname;
+    private LocalDateTime createdTime;
+    private String messageType; // TEXT / IMAGE / FILE
+}

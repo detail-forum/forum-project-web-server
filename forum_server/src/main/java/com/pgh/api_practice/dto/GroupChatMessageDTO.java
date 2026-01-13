@@ -1,6 +1,7 @@
 package com.pgh.api_practice.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.pgh.api_practice.entity.MessageType;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,13 +23,18 @@ public class GroupChatMessageDTO {
     private boolean isAdmin;
     
     private LocalDateTime createdTime;
-    private int readCount;
     
     private Long replyToMessageId;  // 답장한 메시지 ID
     private ReplyToMessageInfo replyToMessage;  // 답장한 메시지 정보
     
     private List<ReactionInfo> reactions;  // 반응 정보
     private List<String> myReactions;  // 현재 사용자가 추가한 반응 목록
+
+    private MessageType messageType;
+
+    private String fileUrl;
+    private String fileName;
+    private Long fileSize;
     
     @Getter
     @Setter

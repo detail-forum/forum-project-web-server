@@ -14,6 +14,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor authInterceptor;
+    private final WebSocketHandshakeInterceptor webSocketHandshakeInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
@@ -29,11 +30,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // WebSocket 연결 엔드포인트 (SockJS fallback 지원)
         // allowedOriginPatterns만 사용 (allowCredentials와 호환)
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // CORS 설정 (와일드카드 지원)
-                .withSockJS()
-                .setHeartbeatTime(25000) // 하트비트 간격 설정
-                .setDisconnectDelay(5000); // 연결 해제 지연 시간
+        registry.addEndpoint("/api/ws/chat/direct/{chatRoomId}")
+                .setAllowedOriginPatterns("*")
+                .addInterceptors(webSocketHandshakeInterceptor);
     }
 
     @Override

@@ -40,17 +40,19 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 String token = authToken.substring(7);
                 
                 try {
-                    if (tokenProvider.validateToken(token)) {
-                        String username = tokenProvider.getUsername(token);
-                        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                        
-                        Principal principal = new UsernamePasswordAuthenticationToken(
-                            username, null, userDetails.getAuthorities()
-                        );
-                        accessor.setUser(principal);
-                        log.info("WebSocket 연결 인증 성공: {}", username);
-                    } else {
-                        log.warn("WebSocket 연결 인증 실패: 유효하지 않은 토큰");
+                    if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+
+                        String username = (String) accessor.getSessionAttributes().get("username");
+
+                        if (username != null) {
+                            Principal principal = new UsernamePasswordAuthenticationToken(
+                                    username, null, null
+                            );
+                            accessor.setUser(principal);
+                            log.info("STOMP CONNECT 인증 완료: {}", username);
+                        } else {
+                            log.warn("STOMP CONNECT 실패: Handshake 인증 정보 없음");
+                        }
                     }
                 } catch (Exception e) {
                     log.error("WebSocket 연결 인증 오류: {}", e.getMessage(), e);

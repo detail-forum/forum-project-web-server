@@ -32,4 +32,7 @@ public interface GroupRepository extends JpaRepository<Group, Long> {
            "     ELSE 4 END, " +
            "g.createdTime DESC")
     List<Group> searchGroups(@org.springframework.data.repository.query.Param("query") String query);
+
+    List<Group> findByOwnerIdAndIsDeletedFalse(Long ownerId);
+    List<Group> findByOwnerId(Long ownerId);
 }

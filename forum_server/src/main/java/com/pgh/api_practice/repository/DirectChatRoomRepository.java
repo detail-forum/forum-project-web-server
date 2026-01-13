@@ -21,4 +21,16 @@ public interface DirectChatRoomRepository extends JpaRepository<DirectChatRoom, 
         order by r.updatedTime desc
     """)
     List<DirectChatRoom> findMyRooms(@Param("userId") Long userId);
+
+    /** 채팅방 참여자 여부 확인 (Handshake / 권한 검증용) */
+    @Query("""
+        select count(r) > 0
+        from DirectChatRoom r
+        where r.id = :roomId
+          and (r.user1Id = :userId or r.user2Id = :userId)
+    """)
+    boolean isParticipant(
+            @Param("roomId") Long roomId,
+            @Param("userId") Long userId
+    );
 }

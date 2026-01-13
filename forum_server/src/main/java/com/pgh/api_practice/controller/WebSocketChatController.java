@@ -75,9 +75,9 @@ public class WebSocketChatController {
             
             String topic = "/topic/chat/" + groupId + "/" + roomId;
             log.info("메시지 브로드캐스트 시작: topic={}, messageDTO={}", topic, messageDTO);
-            log.info("메시지 DTO 상세: id={}, message={}, username={}, nickname={}, isAdmin={}, readCount={}", 
+            log.info("메시지 DTO 상세: id={}, message={}, username={}, nickname={}, isAdmin={}",
                     messageDTO.getId(), messageDTO.getMessage(), messageDTO.getUsername(), 
-                    messageDTO.getNickname(), messageDTO.isAdmin(), messageDTO.getReadCount());
+                    messageDTO.getNickname(), messageDTO.isAdmin());
             
             try {
                 // 해당 채팅방의 모든 구독자에게 메시지 전송

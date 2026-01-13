@@ -239,4 +239,15 @@ public class GroupController {
         groupService.toggleReaction(groupId, roomId, messageId, emoji);
         return ResponseEntity.ok(ApiResponse.ok("반응이 업데이트되었습니다."));
     }
+
+    /** 그룹 채팅방 목록 통합 조회 */
+    @GetMapping("/chat/group/rooms")
+    public ResponseEntity<ApiResponse<List<GroupChatRoomListDTO>>> getMyGroupChatRooms() {
+
+        List<GroupChatRoomListDTO> rooms = groupService.getMyGroupChatRooms();
+
+        return ResponseEntity.ok(
+                ApiResponse.ok(rooms, "그룹 채팅방 목록 조회 성공")
+        );
+    }
 }

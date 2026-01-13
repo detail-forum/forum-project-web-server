@@ -36,6 +36,19 @@ public class GroupChatMessage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type", nullable = false)
+    private MessageType messageType;
+
+    @Column(name = "file_url")
+    private String fileUrl;
+
+    @Column(name = "file_name")
+    private String fileName;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
@@ -43,10 +56,6 @@ public class GroupChatMessage {
     @Column(name = "create_datetime")
     @CreatedDate
     private LocalDateTime createdTime;
-
-    @Builder.Default
-    @Column(name = "read_count", nullable = false)
-    private int readCount = 0;
 
     public void setDeleted(boolean deleted) {
         this.isDeleted = deleted;

@@ -99,7 +99,6 @@ public class WebSocketChatService {
                 .user(currentUser)
                 .message(messageText)
                 .replyToMessage(replyToMessage)
-                .readCount(0)
                 .build();
 
         log.info("메시지 저장 시작: message={}", message);
@@ -128,9 +127,6 @@ public class WebSocketChatService {
                     .user(user)
                     .build();
             readRepository.save(read);
-
-            // 읽음 수 업데이트
-            message.setReadCount(message.getReadCount() + 1);
             messageRepository.save(message);
         }
     }
@@ -241,7 +237,6 @@ public class WebSocketChatService {
                 .profileImageUrl(message.getUser().getProfileImageUrl())
                 .isAdmin(isAdmin)
                 .createdTime(message.getCreatedTime())
-                .readCount(message.getReadCount())
                 .replyToMessageId(message.getReplyToMessage() != null ? message.getReplyToMessage().getId() : null)
                 .replyToMessage(replyToMessageInfo)
                 .reactions(reactions)

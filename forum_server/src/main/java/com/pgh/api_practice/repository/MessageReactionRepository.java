@@ -21,4 +21,22 @@ public interface MessageReactionRepository extends JpaRepository<MessageReaction
     List<String> findEmojisByMessageIdAndUserId(@Param("messageId") Long messageId, @Param("userId") Long userId);
     
     void deleteByMessageIdAndUserIdAndEmoji(Long messageId, Long userId, String emoji);
+
+    @Query("""
+    SELECT r.message.id, r.emoji, COUNT(r)
+    FROM MessageReaction r
+    WHERE r.message.id IN :messageIds
+    GROUP BY r.message.id, r.emoji
+    """)
+    List<Object[]> countByMessageIdsGroupByEmoji(@Param("messageIds") List<Long> messageIds);
+
+    @Query("""
+    SELECT r.message.id, r.emoji
+    FROM MessageReaction r
+    WHERE r.message.id IN :messageIds AND r.user.id = :userId
+    """)
+    List<Object[]> findMyReactions(
+            @Param("messageIds") List<Long> messageIds,
+            @Param("userId") Long userId
+    );
 }

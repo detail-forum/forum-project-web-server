@@ -9,15 +9,14 @@ import com.pgh.api_practice.repository.*;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,10 +26,10 @@ public class GroupService {
     private final GroupRepository groupRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final GroupChatRoomRepository groupChatRoomRepository;
-    private final GroupPostRepository groupPostRepository;
     private final GroupChatMessageRepository groupChatMessageRepository;
     private final UserRepository userRepository;
     private final MessageReactionRepository messageReactionRepository;
+    private final GroupChatReadStatusRepository groupChatReadStatusRepository;
 
     /** 현재 사용자 가져오기 */
     private Users getCurrentUser() {
@@ -53,7 +52,7 @@ public class GroupService {
         long ownedGroupCount = groupRepository.countByOwnerId(currentUser.getId());
         long memberGroupCount = groupMemberRepository.findByUserId(currentUser.getId()).size();
         long totalGroupCount = ownedGroupCount + memberGroupCount;
-        
+
         if (totalGroupCount >= 10) {
             throw new IllegalStateException("한 사용자는 최대 10개의 모임에 가입할 수 있습니다.");
         }
@@ -139,30 +138,30 @@ public class GroupService {
     public Page<GroupListDTO> getGroupList(Pageable pageable, Boolean myGroups) {
         Users currentUser = getCurrentUser();
         Page<Group> groups;
-        
+
         // 내 모임만 필터링하는 경우
         if (myGroups != null && myGroups && currentUser != null) {
             // 현재 사용자가 주인인 모임 조회
             List<Group> ownedGroups = groupRepository.findByOwnerIdAndIsDeletedFalseOrderByCreatedTimeDesc(currentUser.getId());
-            
+
             // 현재 사용자가 멤버인 모임 조회
             List<GroupMember> memberships = groupMemberRepository.findByUserId(currentUser.getId());
             List<Long> memberGroupIds = memberships.stream()
                     .map(gm -> gm.getGroup().getId())
                     .collect(Collectors.toList());
-            
+
             // 주인인 모임과 멤버인 모임 합치기
             List<Long> allGroupIds = new ArrayList<>();
             allGroupIds.addAll(ownedGroups.stream().map(Group::getId).collect(Collectors.toList()));
             allGroupIds.addAll(memberGroupIds);
-            
+
             if (allGroupIds.isEmpty()) {
                 return new PageImpl<>(new ArrayList<>(), pageable, 0);
             }
-            
+
             // 중복 제거
             allGroupIds = allGroupIds.stream().distinct().collect(Collectors.toList());
-            
+
             // 해당 모임들만 조회 (페이지네이션 적용)
             groups = groupRepository.findByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(allGroupIds, pageable);
         } else {
@@ -501,35 +500,19 @@ public class GroupService {
         groupRepository.save(group);
     }
 
-    /** 채팅방 목록 조회 */
     @Transactional(readOnly = true)
     public List<GroupChatRoomDTO> getChatRooms(Long groupId) {
+
         Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
 
-        Users currentUser = getCurrentUser();
-        boolean isAdmin = false;
+        Users user = getCurrentUser();
+        boolean admin = user != null && isAdmin(group, groupId, user);
 
-        if (currentUser != null) {
-            // 모임 주인인지 확인
-            boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
-            if (isOwner) {
-                isAdmin = true; // 모임 주인은 항상 관리자
-            } else {
-                // 멤버인지 확인
-                Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-                if (member.isPresent()) {
-                    isAdmin = member.get().isAdmin();
-                }
-            }
-        }
-
-        List<GroupChatRoom> rooms = groupChatRoomRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedTimeAsc(groupId);
-        
-        // 관리자가 아니면 관리자방 제외
-        final boolean finalIsAdmin = isAdmin;
-        return rooms.stream()
-                .filter(room -> finalIsAdmin || !room.isAdminRoom())
+        return groupChatRoomRepository
+                .findByGroupIdAndIsDeletedFalseOrderByCreatedTimeAsc(groupId)
+                .stream()
+                .filter(room -> admin || !room.isAdminRoom())
                 .map(room -> GroupChatRoomDTO.builder()
                         .id(room.getId())
                         .name(room.getName())
@@ -541,20 +524,105 @@ public class GroupService {
                 .collect(Collectors.toList());
     }
 
-    /** 채팅방 생성 */
+    @Transactional(readOnly = true)
+    public List<GroupChatRoomListDTO> getMyGroupChatRooms() {
+
+        Users user = requireUser();
+
+        List<Long> groupIds = new ArrayList<>();
+
+        groupRepository.findByOwnerIdAndIsDeletedFalse(user.getId())
+                .forEach(g -> groupIds.add(g.getId()));
+
+        groupMemberRepository.findByUserId(user.getId())
+                .forEach(m -> groupIds.add(m.getGroup().getId()));
+
+        List<Long> distinctGroupIds = groupIds.stream()
+                .distinct()
+                .toList();
+
+        if (distinctGroupIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<GroupChatRoom> rooms =
+                groupChatRoomRepository.findByGroupIdInAndIsDeletedFalse(distinctGroupIds);
+
+        if (rooms.isEmpty()) {
+            return List.of();
+        }
+
+        List<GroupChatRoom> filteredRooms = rooms.stream()
+                .filter(room -> {
+                    if (!room.isAdminRoom()) return true;
+                    return isAdmin(room.getGroup(), room.getGroup().getId(), user);
+                })
+                .toList();
+
+        List<Long> roomIds = filteredRooms.stream()
+                .map(GroupChatRoom::getId)
+                .toList();
+
+        // 마지막 메시지
+        Map<Long, GroupChatMessage> lastMessageMap =
+                groupChatMessageRepository.findLastMessagesByRoomIds(roomIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                m -> m.getChatRoom().getId(),
+                                m -> m
+                        ));
+
+        // 읽음 상태
+        Map<Long, Long> lastReadMap =
+                groupChatReadStatusRepository
+                        .findByUserIdAndChatRoomIdIn(user.getId(), roomIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                rs -> rs.getChatRoom().getId(),
+                                rs -> rs.getLastReadMessageId() == null ? 0L : rs.getLastReadMessageId()
+                        ));
+
+        return filteredRooms.stream()
+                .map(room -> {
+
+                    GroupChatMessage last = lastMessageMap.get(room.getId());
+
+                    long unreadCount =
+                            groupChatReadStatusRepository.countUnreadMessage(
+                                    room.getId(),
+                                    user.getId(),
+                                    lastReadMap.getOrDefault(room.getId(), 0L)
+                            );
+
+                    return GroupChatRoomListDTO.builder()
+                            .groupId(room.getGroup().getId())
+                            .groupName(room.getGroup().getName())
+                            .roomId(room.getId())
+                            .roomName(room.getName())
+                            .roomProfileImageUrl(room.getProfileImageUrl())
+                            .lastMessage(last != null ? last.getMessage() : null)
+                            .lastMessageTime(last != null ? last.getCreatedTime() : null)
+                            .unreadCount((int) unreadCount)
+                            .build();
+                })
+                .sorted(
+                        Comparator.comparing(
+                                GroupChatRoomListDTO::getLastMessageTime,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        )
+                )
+                .toList();
+    }
+
     @Transactional
     public Long createChatRoom(Long groupId, CreateGroupChatRoomDTO dto) {
-        Users currentUser = getCurrentUser();
-        if (currentUser == null) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
-        }
+
+        Users user = requireUser();
 
         Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
 
-        // 관리자만 채팅방 생성 가능
-        Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-        if (member.isEmpty() || !member.get().isAdmin()) {
+        if (!isAdmin(group, groupId, user)) {
             throw new ApplicationUnauthorizedException("모임 관리자만 채팅방을 생성할 수 있습니다.");
         }
 
@@ -565,8 +633,7 @@ public class GroupService {
                 .isAdminRoom(false)
                 .build();
 
-        GroupChatRoom created = groupChatRoomRepository.save(room);
-        return created.getId();
+        return groupChatRoomRepository.save(room).getId();
     }
 
     /** 채팅방 수정 */
@@ -632,13 +699,10 @@ public class GroupService {
         groupChatRoomRepository.save(room);
     }
 
-    /** 채팅 메시지 전송 */
     @Transactional
     public Long sendChatMessage(Long groupId, Long roomId, CreateGroupChatMessageDTO dto) {
-        Users currentUser = getCurrentUser();
-        if (currentUser == null) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
-        }
+
+        Users user = requireUser();
 
         Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
@@ -646,159 +710,199 @@ public class GroupService {
         GroupChatRoom room = groupChatRoomRepository.findByIdAndIsDeletedFalse(roomId)
                 .orElseThrow(() -> new ResourceNotFoundException("채팅방을 찾을 수 없습니다."));
 
-        // 모임 멤버인지 확인
-        if (!groupMemberRepository.existsByGroupIdAndUserId(groupId, currentUser.getId())) {
+        if (!isMember(groupId, user.getId()) && !isOwner(group, user)) {
             throw new ApplicationUnauthorizedException("모임 멤버만 메시지를 전송할 수 있습니다.");
         }
 
-        // 관리자방은 관리자만 접근 가능
-        if (room.isAdminRoom()) {
-            Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-            if (member.isEmpty() || !member.get().isAdmin()) {
-                throw new ApplicationUnauthorizedException("관리자만 관리자방에 메시지를 전송할 수 있습니다.");
-            }
+        if (room.isAdminRoom() && !isAdmin(group, groupId, user)) {
+            throw new ApplicationUnauthorizedException("관리자만 관리자방에 접근할 수 있습니다.");
         }
 
-        // 답장할 메시지 조회
-        GroupChatMessage replyToMessage = null;
+        GroupChatMessage reply = null;
         if (dto.getReplyToMessageId() != null) {
-            replyToMessage = groupChatMessageRepository.findById(dto.getReplyToMessageId())
+            reply = groupChatMessageRepository.findById(dto.getReplyToMessageId())
                     .orElseThrow(() -> new ResourceNotFoundException("답장할 메시지를 찾을 수 없습니다."));
-            // 같은 채팅방의 메시지인지 확인
-            if (!replyToMessage.getChatRoom().getId().equals(roomId)) {
-                throw new IllegalArgumentException("답장할 메시지가 같은 채팅방에 없습니다.");
+            if (!reply.getChatRoom().getId().equals(roomId)) {
+                throw new IllegalArgumentException("다른 채팅방 메시지에는 답장할 수 없습니다.");
             }
         }
 
-        GroupChatMessage message = GroupChatMessage.builder()
-                .chatRoom(room)
-                .user(currentUser)
-                .message(dto.getMessage())
-                .replyToMessage(replyToMessage)
-                .build();
+        MessageType type =
+                dto.getMessageType() != null ? dto.getMessageType() : MessageType.TEXT;
 
-        GroupChatMessage created = groupChatMessageRepository.save(message);
-        return created.getId();
+        switch (type) {
+            case TEXT -> {
+                if (dto.getMessage() == null || dto.getMessage().trim().isEmpty()) {
+                    throw new ApplicationBadRequestException("TEXT 메시지는 message가 필수입니다.");
+                }
+            }
+            case IMAGE -> {
+                if (dto.getFileUrl() == null || dto.getFileUrl().isBlank()) {
+                    throw new ApplicationBadRequestException("IMAGE 메시지는 fileUrl이 필수입니다.");
+                }
+            }
+            case FILE -> {
+                if (dto.getFileUrl() == null || dto.getFileName() == null || dto.getFileSize() == null) {
+                    throw new ApplicationBadRequestException("FILE 메시지는 fileUrl, fileName, fileSize가 필수입니다.");
+                }
+            }
+        }
+
+        return groupChatMessageRepository.save(
+                GroupChatMessage.builder()
+                        .chatRoom(room)
+                        .user(user)
+                        .message(dto.getMessage())
+                        .messageType(type)
+                        .fileUrl(dto.getFileUrl())
+                        .fileName(dto.getFileName())
+                        .fileSize(dto.getFileSize())
+                        .replyToMessage(reply)
+                        .build()
+        ).getId();
     }
 
-    /** 채팅 메시지 목록 조회 */
-    @Transactional(readOnly = true)
+    @Transactional
     public List<GroupChatMessageDTO> getChatMessages(Long groupId, Long roomId, int page, int size) {
+
         Group group = groupRepository.findByIdAndIsDeletedFalse(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("모임을 찾을 수 없습니다."));
 
         GroupChatRoom room = groupChatRoomRepository.findByIdAndIsDeletedFalse(roomId)
                 .orElseThrow(() -> new ResourceNotFoundException("채팅방을 찾을 수 없습니다."));
 
-        Users currentUser = getCurrentUser();
-        
-        // 관리자방은 관리자만 접근 가능
+        Users currentUser = requireUser();
+
+        if(!room.getGroup().getId().equals(groupId)) {
+            throw new ApplicationBadRequestException("채팅방이 해당 모임에 속하지 않습니다.");
+        }
+
+        if (!isMember(groupId, currentUser.getId())) {
+            throw new ApplicationUnauthorizedException("모임 멤버만 채팅방을 조회할 수 있습니다.");
+        }
+
         if (room.isAdminRoom()) {
-            if (currentUser == null) {
-                throw new ApplicationUnauthorizedException("인증이 필요합니다.");
-            }
-            // 모임 주인인지 확인
-            boolean isOwner = group.getOwner().getId().equals(currentUser.getId());
-            if (!isOwner) {
-                // 멤버인지 확인
-                Optional<GroupMember> member = groupMemberRepository.findByGroupIdAndUserId(groupId, currentUser.getId());
-                if (member.isEmpty() || !member.get().isAdmin()) {
-                    throw new ApplicationUnauthorizedException("관리자만 관리자방을 볼 수 있습니다.");
-                }
+            if (!isAdmin(group, groupId, currentUser)) {
+                throw new ApplicationUnauthorizedException("관리자만 관리자 채팅방을 조회할 수 있습니다.");
             }
         }
 
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        List<GroupChatMessage> messages = groupChatMessageRepository.findRecentMessages(roomId, pageable);
+        Pageable pageable = PageRequest.of(page, size);
+        List<GroupChatMessage> messages =
+                groupChatMessageRepository.findMessagesAsc(roomId, pageable);
 
-        // 모임 주인과 관리자 목록 확인
-        Long ownerId = group.getOwner().getId();
-        List<Long> adminIds = new ArrayList<>();
-        adminIds.add(ownerId); // 모임 주인은 항상 관리자
-        try {
-            List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
-            adminIds.addAll(members.stream()
-                    .filter(GroupMember::isAdmin)
-                    .map(m -> m.getUser().getId())
-                    .collect(Collectors.toList()));
-        } catch (Exception e) {
-            // 관리자 목록 조회 실패 시 모임 주인만 포함
+        if (messages.isEmpty()) {
+            return List.of();
         }
 
-        final List<Long> finalAdminIds = adminIds;
-        return messages.stream().<GroupChatMessageDTO>map(msg -> {
-            Long userId = msg.getUser().getId();
-            boolean isAdmin = finalAdminIds.contains(userId);
-            
-            // 채팅방별 별명 조회
-            String displayName = null;
-            Optional<GroupMember> memberOpt = groupMemberRepository.findByGroupIdAndUserId(groupId, msg.getUser().getId());
-            if (memberOpt.isPresent()) {
-                displayName = memberOpt.get().getDisplayName();
-            }
-            
-            // 답장 정보 처리
-            GroupChatMessageDTO.ReplyToMessageInfo replyToMessageInfo = null;
+        /* 읽음 처리 */
+        if (currentUser != null && !messages.isEmpty()) {
+            Long lastReadMessageId = messages.get(messages.size() - 1).getId();
+
+            GroupChatReadStatus readStatus =
+                    groupChatReadStatusRepository
+                            .findByUserIdAndChatRoomId(currentUser.getId(), roomId)
+                            .orElseGet(() -> GroupChatReadStatus.builder()
+                                    .user(currentUser)
+                                    .chatRoom(room)
+                                    .build()
+                            );
+
+            readStatus.setLastReadMessageId(lastReadMessageId);
+            groupChatReadStatusRepository.save(readStatus);
+        }
+
+    /* ===============================
+       사전 데이터 일괄 조회
+       =============================== */
+
+        List<Long> messageIds = messages.stream()
+                .map(GroupChatMessage::getId)
+                .toList();
+
+        // 그룹 멤버 displayName Map
+        List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
+        var displayNameMap = members.stream()
+                .collect(Collectors.toMap(
+                        gm -> gm.getUser().getId(),
+                        GroupMember::getDisplayName,
+                        (a, b) -> a
+                ));
+
+        // 관리자 ID Set
+        var adminIds = members.stream()
+                .filter(GroupMember::isAdmin)
+                .map(gm -> gm.getUser().getId())
+                .collect(Collectors.toSet());
+        adminIds.add(group.getOwner().getId());
+
+        // 반응 count Map
+        var reactionCountMap = messageReactionRepository
+                .countByMessageIdsGroupByEmoji(messageIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        row -> (Long) row[0],
+                        Collectors.mapping(
+                                row -> new GroupChatMessageDTO.ReactionInfo(
+                                        (String) row[1],
+                                        ((Number) row[2]).intValue()
+                                ),
+                                Collectors.toList()
+                        )
+                ));
+
+        // 내 반응 Map
+        var myReactionMap = new java.util.HashMap<Long, List<String>>();
+        if (currentUser != null) {
+            messageReactionRepository
+                    .findMyReactions(messageIds, currentUser.getId())
+                    .forEach(row -> {
+                        Long msgId = (Long) row[0];
+                        String emoji = (String) row[1];
+                        myReactionMap
+                                .computeIfAbsent(msgId, k -> new ArrayList<>())
+                                .add(emoji);
+                    });
+        }
+
+        return messages.stream().map(msg -> {
+
+            Users user = msg.getUser();
+
+            GroupChatMessageDTO.ReplyToMessageInfo replyInfo = null;
             if (msg.getReplyToMessage() != null) {
-                GroupChatMessage replyTo = msg.getReplyToMessage();
-                Users replyToUser = replyTo.getUser();
-                // 답장한 메시지 작성자의 displayName 조회
-                String replyToDisplayName = null;
-                Optional<GroupMember> replyToMemberOpt = groupMemberRepository.findByGroupIdAndUserId(groupId, replyToUser.getId());
-                if (replyToMemberOpt.isPresent()) {
-                    replyToDisplayName = replyToMemberOpt.get().getDisplayName();
-                }
-                
-                replyToMessageInfo = GroupChatMessageDTO.ReplyToMessageInfo.builder()
-                        .id(replyTo.getId())
-                        .message(replyTo.getMessage())
-                        .username(replyToUser.getUsername())
-                        .nickname(replyToUser.getNickname())
-                        .displayName(replyToDisplayName)
-                        .profileImageUrl(replyToUser.getProfileImageUrl())
-                        .build();
-            }
-            
-            // 반응 정보 조회
-            List<GroupChatMessageDTO.ReactionInfo> reactions = new ArrayList<>();
-            try {
-                List<Object[]> reactionCounts = messageReactionRepository.countByMessageIdGroupByEmoji(msg.getId());
-                for (Object[] row : reactionCounts) {
-                    String emoji = (String) row[0];
-                    Long count = ((Number) row[1]).longValue();
-                    reactions.add(GroupChatMessageDTO.ReactionInfo.builder()
-                            .emoji(emoji)
-                            .count(count.intValue())
-                            .build());
-                }
-            } catch (Exception e) {
-                // 반응 정보 조회 실패 시 빈 리스트
-            }
+                GroupChatMessage reply = msg.getReplyToMessage();
+                Users replyUser = reply.getUser();
 
-            // 현재 사용자가 추가한 반응 목록
-            List<String> myReactions = new ArrayList<>();
-            try {
-                if (currentUser != null) {
-                    myReactions = messageReactionRepository.findEmojisByMessageIdAndUserId(msg.getId(), currentUser.getId());
-                }
-            } catch (Exception e) {
-                // 현재 사용자 반응 조회 실패 시 빈 리스트
+                replyInfo = GroupChatMessageDTO.ReplyToMessageInfo.builder()
+                        .id(reply.getId())
+                        .message(reply.getMessage())
+                        .username(replyUser.getUsername())
+                        .nickname(replyUser.getNickname())
+                        .displayName(displayNameMap.get(replyUser.getId()))
+                        .profileImageUrl(replyUser.getProfileImageUrl())
+                        .build();
             }
 
             return GroupChatMessageDTO.builder()
                     .id(msg.getId())
                     .message(msg.getMessage())
-                    .username(msg.getUser().getUsername())
-                    .nickname(msg.getUser().getNickname())
-                    .displayName(displayName)  // 채팅방별 별명
-                    .profileImageUrl(msg.getUser().getProfileImageUrl())
-                    .isAdmin(isAdmin)
+                    .messageType(msg.getMessageType())
+                    .fileUrl(msg.getFileUrl())
+                    .fileName(msg.getFileName())
+                    .fileSize(msg.getFileSize())
+                    .username(user.getUsername())
+                    .nickname(user.getNickname())
+                    .displayName(displayNameMap.get(user.getId()))
+                    .profileImageUrl(user.getProfileImageUrl())
+                    .isAdmin(adminIds.contains(user.getId()))
                     .createdTime(msg.getCreatedTime())
-                    .readCount(msg.getReadCount())
-                    .replyToMessageId(msg.getReplyToMessage() != null ? msg.getReplyToMessage().getId() : null)
-                    .replyToMessage(replyToMessageInfo)
-                    .reactions(reactions)
-                    .myReactions(myReactions)
+                    .replyToMessageId(
+                            msg.getReplyToMessage() != null ? msg.getReplyToMessage().getId() : null
+                    )
+                    .replyToMessage(replyInfo)
+                    .reactions(reactionCountMap.getOrDefault(msg.getId(), List.of()))
+                    .myReactions(myReactionMap.getOrDefault(msg.getId(), List.of()))
                     .build();
         }).collect(Collectors.toList());
     }
@@ -883,5 +987,34 @@ public class GroupService {
                     .build();
             messageReactionRepository.save(reaction);
         }
+    }
+
+    /* =========================
+   권한 판별 공통 메서드
+   ========================= */
+    private Users requireUser() {
+        Users user = getCurrentUser();
+        if (user == null) {
+            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
+        }
+        return user;
+    }
+
+    private boolean isOwner(Group group, Users user) {
+        return group.getOwner().getId().equals(user.getId());
+    }
+
+    private boolean isMember(Long groupId, Long userId) {
+        return groupMemberRepository.existsByGroupIdAndUserId(groupId, userId);
+    }
+
+    private boolean isAdmin(Group group, Long groupId, Users user) {
+        if (isOwner(group, user)) {
+            return true;
+        }
+        return groupMemberRepository
+                .findByGroupIdAndUserId(groupId, user.getId())
+                .map(GroupMember::isAdmin)
+                .orElse(false);
     }
 }

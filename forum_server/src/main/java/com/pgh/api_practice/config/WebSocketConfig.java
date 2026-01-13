@@ -14,25 +14,18 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor authInterceptor;
-    private final WebSocketHandshakeInterceptor webSocketHandshakeInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // 클라이언트가 구독할 수 있는 브로커 경로
         config.enableSimpleBroker("/topic", "/queue");
-        // 클라이언트가 메시지를 보낼 때 사용하는 prefix
         config.setApplicationDestinationPrefixes("/app");
-        // 특정 사용자에게 메시지를 보낼 때 사용하는 prefix
-        config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket 연결 엔드포인트 (SockJS fallback 지원)
-        // allowedOriginPatterns만 사용 (allowCredentials와 호환)
-        registry.addEndpoint("/api/ws/chat/direct/{chatRoomId}")
+        registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
-                .addInterceptors(webSocketHandshakeInterceptor);
+                .withSockJS();
     }
 
     @Override

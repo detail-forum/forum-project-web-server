@@ -40,6 +40,8 @@ public class SecurityConfig {
         http
                 // CSRF 비활성화
                 .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
+
                 // CORS 설정
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 // 세션 비활성화

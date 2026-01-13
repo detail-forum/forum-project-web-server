@@ -14,9 +14,15 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     @Query("SELECT gm FROM GroupMember gm WHERE gm.group.id = :groupId")
     List<GroupMember> findByGroupId(@Param("groupId") Long groupId);
     List<GroupMember> findByUserId(Long userId);
-    
+
     @Query("SELECT COUNT(gm) FROM GroupMember gm WHERE gm.group.id = :groupId")
     long countByGroupId(@Param("groupId") Long groupId);
 
     void deleteByGroupIdAndUserId(Long groupId, Long userId);
+
+    // 멤버 여부 확인
+    boolean existsByGroup_IdAndUser_Id(Long groupId, Long userId);
+
+    // 관리자 여부 확인용
+    Optional<GroupMember> findByGroup_IdAndUser_Id(Long groupId, Long userId);
 }

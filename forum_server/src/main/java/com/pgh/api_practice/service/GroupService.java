@@ -1047,26 +1047,41 @@ public class GroupService {
 
         if (principal instanceof String username) {
             return userRepository.findByUsername(username)
-                    .orElseThrow(() -> new ApplicationUnauthorizedException("사용자를 찾을 수 없습니다."));
+                    .orElseThrow(() ->
+                            new ApplicationUnauthorizedException("사용자를 찾을 수 없습니다.")
+                    );
         }
 
-        throw new ApplicationUnauthorizedException("지원하지 않는 인증 타입입니다.");
+        throw new ApplicationUnauthorizedException("알 수 없는 인증 주체입니다.");
     }
 
     private boolean isOwner(Group group, Users user) {
+        if (group == null || user == null) return false;
+        if (group.getOwner() == null) return false;
+        if (group.getOwner().getId() == null || user.getId() == null) return false;
+
         return group.getOwner().getId().equals(user.getId());
     }
 
     private boolean isMember(Long groupId, Long userId) {
-        return groupMemberRepository.existsByGroupIdAndUserId(groupId, userId);
+        if (groupId == null || userId == null) return false;
+
+        return groupMemberRepository.existsByGroup_IdAndUser_Id(groupId, userId);
     }
 
     private boolean isAdmin(Group group, Long groupId, Users user) {
+        if (group == null || user == null || user.getId() == null) {
+            return false;
+        }
+
+        // 1. 그룹 소유자는 무조건 관리자
         if (isOwner(group, user)) {
             return true;
         }
+
+        // 2. group_member.isAdmin 기준
         return groupMemberRepository
-                .findByGroupIdAndUserId(groupId, user.getId())
+                .findByGroup_IdAndUser_Id(groupId, user.getId())
                 .map(GroupMember::isAdmin)
                 .orElse(false);
     }

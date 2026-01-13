@@ -773,7 +773,7 @@ public class GroupService {
 
         Users currentUser = requireUser();
 
-        if(!room.getGroup().getId().equals(groupId)) {
+        if (!room.getGroup().getId().equals(groupId)) {
             throw new ApplicationBadRequestException("채팅방이 해당 모임에 속하지 않습니다.");
         }
 
@@ -795,8 +795,10 @@ public class GroupService {
             return List.of();
         }
 
-        /* 읽음 처리 */
-        if (currentUser != null && !messages.isEmpty()) {
+    /* ===============================
+       읽음 처리 (null-safe)
+       =============================== */
+        if (currentUser != null) {
             Long lastReadMessageId = messages.get(messages.size() - 1).getId();
 
             GroupChatReadStatus readStatus =
@@ -813,28 +815,38 @@ public class GroupService {
         }
 
     /* ===============================
-       사전 데이터 일괄 조회
+       사전 데이터 일괄 조회 (방어)
        =============================== */
 
         List<Long> messageIds = messages.stream()
                 .map(GroupChatMessage::getId)
+                .filter(Objects::nonNull)
                 .toList();
 
-        // 그룹 멤버 displayName Map
+        // 그룹 멤버 displayName Map (null-safe)
         List<GroupMember> members = groupMemberRepository.findByGroupId(groupId);
-        var displayNameMap = members.stream()
-                .collect(Collectors.toMap(
-                        gm -> gm.getUser().getId(),
-                        GroupMember::getDisplayName,
-                        (a, b) -> a
-                ));
+        var displayNameMap = new HashMap<Long, String>();
 
-        // 관리자 ID Set
+        for (GroupMember gm : members) {
+            if (gm == null || gm.getUser() == null || gm.getUser().getId() == null) continue;
+
+            String dn = gm.getDisplayName();
+            if (dn == null) dn = "";
+
+            displayNameMap.putIfAbsent(gm.getUser().getId(), dn);
+        }
+
+        // 관리자 ID Set (null-safe)
         var adminIds = members.stream()
+                .filter(Objects::nonNull)
+                .filter(gm -> gm.getUser() != null && gm.getUser().getId() != null)
                 .filter(GroupMember::isAdmin)
                 .map(gm -> gm.getUser().getId())
                 .collect(Collectors.toSet());
-        adminIds.add(group.getOwner().getId());
+
+        if (group.getOwner() != null && group.getOwner().getId() != null) {
+            adminIds.add(group.getOwner().getId());
+        }
 
         // 반응 count Map
         var reactionCountMap = messageReactionRepository
@@ -852,7 +864,7 @@ public class GroupService {
                 ));
 
         // 내 반응 Map
-        var myReactionMap = new java.util.HashMap<Long, List<String>>();
+        var myReactionMap = new HashMap<Long, List<String>>();
         if (currentUser != null) {
             messageReactionRepository
                     .findMyReactions(messageIds, currentUser.getId())
@@ -865,46 +877,59 @@ public class GroupService {
                     });
         }
 
-        return messages.stream().map(msg -> {
+    /* ===============================
+       DTO 변환 (핵심 NPE 방어)
+       =============================== */
+        return messages.stream()
+                .map(msg -> {
 
-            Users user = msg.getUser();
+                    Users user = msg.getUser();
+                    if (user == null || user.getId() == null) {
+                        return null; // 작성자 없는 메시지는 스킵
+                    }
 
-            GroupChatMessageDTO.ReplyToMessageInfo replyInfo = null;
-            if (msg.getReplyToMessage() != null) {
-                GroupChatMessage reply = msg.getReplyToMessage();
-                Users replyUser = reply.getUser();
+                    GroupChatMessageDTO.ReplyToMessageInfo replyInfo = null;
+                    if (msg.getReplyToMessage() != null) {
+                        GroupChatMessage reply = msg.getReplyToMessage();
+                        Users replyUser = (reply != null ? reply.getUser() : null);
 
-                replyInfo = GroupChatMessageDTO.ReplyToMessageInfo.builder()
-                        .id(reply.getId())
-                        .message(reply.getMessage())
-                        .username(replyUser.getUsername())
-                        .nickname(replyUser.getNickname())
-                        .displayName(displayNameMap.get(replyUser.getId()))
-                        .profileImageUrl(replyUser.getProfileImageUrl())
-                        .build();
-            }
+                        if (reply != null && replyUser != null && replyUser.getId() != null) {
+                            replyInfo = GroupChatMessageDTO.ReplyToMessageInfo.builder()
+                                    .id(reply.getId())
+                                    .message(reply.getMessage())
+                                    .username(replyUser.getUsername())
+                                    .nickname(replyUser.getNickname())
+                                    .displayName(displayNameMap.get(replyUser.getId()))
+                                    .profileImageUrl(replyUser.getProfileImageUrl())
+                                    .build();
+                        }
+                    }
 
-            return GroupChatMessageDTO.builder()
-                    .id(msg.getId())
-                    .message(msg.getMessage())
-                    .messageType(msg.getMessageType())
-                    .fileUrl(msg.getFileUrl())
-                    .fileName(msg.getFileName())
-                    .fileSize(msg.getFileSize())
-                    .username(user.getUsername())
-                    .nickname(user.getNickname())
-                    .displayName(displayNameMap.get(user.getId()))
-                    .profileImageUrl(user.getProfileImageUrl())
-                    .isAdmin(adminIds.contains(user.getId()))
-                    .createdTime(msg.getCreatedTime())
-                    .replyToMessageId(
-                            msg.getReplyToMessage() != null ? msg.getReplyToMessage().getId() : null
-                    )
-                    .replyToMessage(replyInfo)
-                    .reactions(reactionCountMap.getOrDefault(msg.getId(), List.of()))
-                    .myReactions(myReactionMap.getOrDefault(msg.getId(), List.of()))
-                    .build();
-        }).collect(Collectors.toList());
+                    return GroupChatMessageDTO.builder()
+                            .id(msg.getId())
+                            .message(msg.getMessage())
+                            .messageType(msg.getMessageType())
+                            .fileUrl(msg.getFileUrl())
+                            .fileName(msg.getFileName())
+                            .fileSize(msg.getFileSize())
+                            .username(user.getUsername())
+                            .nickname(user.getNickname())
+                            .displayName(displayNameMap.get(user.getId()))
+                            .profileImageUrl(user.getProfileImageUrl())
+                            .isAdmin(adminIds.contains(user.getId()))
+                            .createdTime(msg.getCreatedTime())
+                            .replyToMessageId(
+                                    msg.getReplyToMessage() != null
+                                            ? msg.getReplyToMessage().getId()
+                                            : null
+                            )
+                            .replyToMessage(replyInfo)
+                            .reactions(reactionCountMap.getOrDefault(msg.getId(), List.of()))
+                            .myReactions(myReactionMap.getOrDefault(msg.getId(), List.of()))
+                            .build();
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     /** 채팅 메시지 삭제 */

@@ -46,11 +46,11 @@ public class DirectChatMessage {
     @Column(name = "file_size")
     private Long fileSize;
 
-    // is_deleted
+    // is_deleted (tinyint(1))
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
-    // created_time
+    // created_time (DB DEFAULT CURRENT_TIMESTAMP)
     @Column(name = "created_time", nullable = false, updatable = false)
     private LocalDateTime createdTime;
 

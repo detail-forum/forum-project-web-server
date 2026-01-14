@@ -31,14 +31,16 @@ public class GroupChatMessage {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reply_to_message_id")
-    private GroupChatMessage replyToMessage;  // 답장한 메시지
+    private GroupChatMessage replyToMessage;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "message_type", nullable = false)
-    private MessageType messageType;
+    @Builder.Default
+    private com.pgh.api_practice.entity.MessageType messageType =
+            com.pgh.api_practice.entity.MessageType.TEXT;
 
     @Column(name = "file_url")
     private String fileUrl;
@@ -53,15 +55,7 @@ public class GroupChatMessage {
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
-    @Column(name = "create_datetime")
     @CreatedDate
+    @Column(name = "create_datetime")
     private LocalDateTime createdTime;
-
-    public void setDeleted(boolean deleted) {
-        this.isDeleted = deleted;
-    }
-
-    public boolean isDeleted() {
-        return this.isDeleted;
-    }
 }

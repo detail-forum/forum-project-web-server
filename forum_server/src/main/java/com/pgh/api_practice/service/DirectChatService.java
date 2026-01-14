@@ -113,7 +113,7 @@ public class DirectChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("상대 사용자를 찾을 수 없습니다: " + otherUserId));
 
         DirectChatMessage lastMessage =
-                messageRepository.findTopByChatRoomOrderByCreatedTimeDesc(room).orElse(null);
+                messageRepository.findTopByChatRoomAndIsDeletedFalseOrderByCreatedTimeDesc(room).orElse(null);
 
         DirectChatReadStatus readStatus =
                 readStatusRepository.findByChatRoomAndUserId(room, myUserId)
@@ -179,9 +179,10 @@ public class DirectChatService {
         Users me = getCurrentUser();
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
-                .orElseThrow(() -> new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("채팅방이 존재하지 않습니다.")
+                );
 
-        // 멤버 검증
         if (!room.getUser1Id().equals(me.getId())
                 && !room.getUser2Id().equals(me.getId())) {
             throw new ResourceNotFoundException("채팅방 접근 권한이 없습니다.");
@@ -190,9 +191,12 @@ public class DirectChatService {
         Pageable pageable = PageRequest.of(page, size);
 
         Page<DirectChatMessage> pageResult =
-                messageRepository.findByChatRoomOrderByCreatedTimeDesc(room, pageable);
+                messageRepository.findByChatRoomAndIsDeletedFalseOrderByCreatedTimeDesc(
+                        room,
+                        pageable
+                );
 
-        DirectChatMessage latestVisibleMessage =
+        DirectChatMessage latestVisible =
                 pageResult.getContent().stream()
                         .max(Comparator.comparing(DirectChatMessage::getId))
                         .orElse(null);
@@ -205,40 +209,36 @@ public class DirectChatService {
                                 )
                         );
 
-        if (latestVisibleMessage != null) {
-            DirectChatMessage prev = myReadStatus.getLastReadMessage();
-            if (prev == null || latestVisibleMessage.getId() > prev.getId()) {
-                myReadStatus.updateRead(latestVisibleMessage);
-            }
+        if (latestVisible != null &&
+                (myReadStatus.getLastReadMessage() == null
+                        || latestVisible.getId() > myReadStatus.getLastReadMessage().getId())) {
+            myReadStatus.updateRead(latestVisible);
         }
 
-        Long myLastReadMessageId =
+        Long myLastRead =
                 myReadStatus.getLastReadMessage() != null
                         ? myReadStatus.getLastReadMessage().getId()
                         : null;
 
         Long otherUserId = room.getOtherUserId(me.getId());
-        
-        // 상대방의 읽음 상태 조회
         DirectChatReadStatus otherReadStatus =
                 readStatusRepository.findByChatRoomAndUserId(room, otherUserId)
                         .orElse(null);
-        
-        Long otherLastReadMessageId =
-                (otherReadStatus != null && otherReadStatus.getLastReadMessage() != null)
+
+        Long otherLastRead =
+                otherReadStatus != null && otherReadStatus.getLastReadMessage() != null
                         ? otherReadStatus.getLastReadMessage().getId()
                         : null;
 
-        List<DirectChatMessageDTO> content = pageResult
-                .map(message ->
+        List<DirectChatMessageDTO> content =
+                pageResult.map(message ->
                         toMessageDTO(
                                 message,
                                 me.getId(),
-                                myLastReadMessageId,
-                                otherLastReadMessageId
+                                myLastRead,
+                                otherLastRead
                         )
-                )
-                .getContent();
+                ).getContent();
 
         return new DirectChatMessagePageDTO(
                 content,
@@ -294,7 +294,7 @@ public class DirectChatService {
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId)
+                        new ResourceNotFoundException("채팅방이 존재하지 않습니다.")
                 );
 
         if (!room.getUser1Id().equals(me.getId())
@@ -404,12 +404,12 @@ public class DirectChatService {
     ) {
         Users me = userRepository.findByUsername(username)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("사용자를 찾을 수 없습니다: " + username)
+                        new ResourceNotFoundException("사용자를 찾을 수 없습니다.")
                 );
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
                 .orElseThrow(() ->
-                        new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId)
+                        new ResourceNotFoundException("채팅방이 존재하지 않습니다.")
                 );
 
         if (!room.getUser1Id().equals(me.getId())
@@ -463,8 +463,6 @@ public class DirectChatService {
             Users sender,
             CreateDirectMessageDTO dto
     ) {
-        validateByType(dto);
-
         DirectChatMessage message = new DirectChatMessage(
                 room,
                 sender.getId(),
@@ -477,19 +475,20 @@ public class DirectChatService {
 
         DirectChatMessage saved = messageRepository.save(message);
 
-        DirectChatReadStatus readStatus = readStatusRepository
-                .findByChatRoomAndUserId(room, sender.getId())
-                .orElseGet(() ->
-                        readStatusRepository.save(
-                                new DirectChatReadStatus(room, sender.getId())
-                        )
-                );
+        DirectChatReadStatus readStatus =
+                readStatusRepository.findByChatRoomAndUserId(room, sender.getId())
+                        .orElseGet(() ->
+                                readStatusRepository.save(
+                                        new DirectChatReadStatus(room, sender.getId())
+                                )
+                        );
 
         readStatus.updateRead(saved);
         readStatusRepository.save(readStatus);
 
         return saved;
     }
+
     @Transactional
     public DirectChatMessageDTO sendAndBroadcast(
             DirectChatRoom room,

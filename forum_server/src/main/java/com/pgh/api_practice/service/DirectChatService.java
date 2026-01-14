@@ -213,6 +213,7 @@ public class DirectChatService {
                 (myReadStatus.getLastReadMessage() == null
                         || latestVisible.getId() > myReadStatus.getLastReadMessage().getId())) {
             myReadStatus.updateRead(latestVisible);
+            readStatusRepository.save(myReadStatus);
         }
 
         Long myLastRead =
@@ -286,23 +287,18 @@ public class DirectChatService {
     }
 
     @Transactional
-    public DirectChatMessageDTO sendMessage(
-            Long chatRoomId,
-            CreateDirectMessageDTO dto
-    ) {
+    public DirectChatMessageDTO sendMessage(Long chatRoomId, CreateDirectMessageDTO dto) {
         Users me = getCurrentUser();
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("채팅방이 존재하지 않습니다.")
-                );
+                .orElseThrow(() -> new ResourceNotFoundException("채팅방이 존재하지 않습니다."));
 
-        if (!room.getUser1Id().equals(me.getId())
-                && !room.getUser2Id().equals(me.getId())) {
+        if (!room.getUser1Id().equals(me.getId()) && !room.getUser2Id().equals(me.getId())) {
             throw new ResourceNotFoundException("채팅방 접근 권한이 없습니다.");
         }
 
-        return sendAndBroadcast(room, me, dto);
+        DirectChatMessage saved = createAndSaveMessage(room, me, dto);
+        return toMessageDTOForSend(saved, me.getId());
     }
 
     private DirectChatMessageDTO toMessageDTOForSend(DirectChatMessage message, Long myUserId) {
@@ -397,23 +393,14 @@ public class DirectChatService {
 
     /** WebSocket을 통해 메시지 전송 (WebSocket 엔드포인트에서 호출) */
     @Transactional
-    public DirectChatMessageDTO sendMessageViaWebSocket(
-            Long chatRoomId,
-            String messageText,
-            String username
-    ) {
+    public DirectChatMessageDTO sendMessageViaWebSocket(Long chatRoomId, String messageText, String username) {
         Users me = userRepository.findByUsername(username)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("사용자를 찾을 수 없습니다.")
-                );
+                .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다."));
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("채팅방이 존재하지 않습니다.")
-                );
+                .orElseThrow(() -> new ResourceNotFoundException("채팅방이 존재하지 않습니다."));
 
-        if (!room.getUser1Id().equals(me.getId())
-                && !room.getUser2Id().equals(me.getId())) {
+        if (!room.getUser1Id().equals(me.getId()) && !room.getUser2Id().equals(me.getId())) {
             throw new ResourceNotFoundException("채팅방 접근 권한이 없습니다.");
         }
 
@@ -421,7 +408,8 @@ public class DirectChatService {
         dto.setMessageType(CreateDirectMessageDTO.MessageType.TEXT);
         dto.setMessage(messageText);
 
-        return sendAndBroadcast(room, me, dto);
+        DirectChatMessage saved = createAndSaveMessage(room, me, dto);
+        return toMessageDTOForSend(saved, me.getId());
     }
 
     /** 일반 채팅 메시지 읽음 처리 */
@@ -463,6 +451,7 @@ public class DirectChatService {
             Users sender,
             CreateDirectMessageDTO dto
     ) {
+        validateByType(dto);
         DirectChatMessage message = new DirectChatMessage(
                 room,
                 sender.getId(),

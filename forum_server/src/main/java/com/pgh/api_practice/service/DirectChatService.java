@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.Comparator;
 import java.util.List;
@@ -35,6 +36,7 @@ public class DirectChatService {
     private final DirectChatReadStatusRepository readStatusRepository;
     private final DirectChatRoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /** 1대1 채팅방 생성 또는 조회 */
     @Transactional
@@ -291,17 +293,16 @@ public class DirectChatService {
         Users me = getCurrentUser();
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
-                .orElseThrow(() -> new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId)
+                );
 
         if (!room.getUser1Id().equals(me.getId())
                 && !room.getUser2Id().equals(me.getId())) {
             throw new ResourceNotFoundException("채팅방 접근 권한이 없습니다.");
         }
 
-        DirectChatMessage saved =
-                createAndSaveMessage(room, me, dto);
-
-        return toMessageDTOForSend(saved, me.getId());
+        return sendAndBroadcast(room, me, dto);
     }
 
     private DirectChatMessageDTO toMessageDTOForSend(DirectChatMessage message, Long myUserId) {
@@ -402,10 +403,14 @@ public class DirectChatService {
             String username
     ) {
         Users me = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("사용자를 찾을 수 없습니다: " + username));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("사용자를 찾을 수 없습니다: " + username)
+                );
 
         DirectChatRoom room = roomRepository.findById(chatRoomId)
-                .orElseThrow(() -> new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("채팅방이 존재하지 않습니다: " + chatRoomId)
+                );
 
         if (!room.getUser1Id().equals(me.getId())
                 && !room.getUser2Id().equals(me.getId())) {
@@ -416,10 +421,7 @@ public class DirectChatService {
         dto.setMessageType(CreateDirectMessageDTO.MessageType.TEXT);
         dto.setMessage(messageText);
 
-        DirectChatMessage saved =
-                createAndSaveMessage(room, me, dto);
-
-        return toMessageDTOForSend(saved, me.getId());
+        return sendAndBroadcast(room, me, dto);
     }
 
     /** 일반 채팅 메시지 읽음 처리 */
@@ -487,5 +489,24 @@ public class DirectChatService {
         readStatusRepository.save(readStatus);
 
         return saved;
+    }
+    @Transactional
+    public DirectChatMessageDTO sendAndBroadcast(
+            DirectChatRoom room,
+            Users sender,
+            CreateDirectMessageDTO dto
+    ) {
+        DirectChatMessage saved =
+                createAndSaveMessage(room, sender, dto);
+
+        DirectChatMessageDTO response =
+                toMessageDTOForSend(saved, sender.getId());
+
+        messagingTemplate.convertAndSend(
+                "/topic/direct/" + room.getId(),
+                response
+        );
+
+        return response;
     }
 }

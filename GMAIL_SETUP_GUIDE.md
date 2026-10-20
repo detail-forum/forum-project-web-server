@@ -32,7 +32,7 @@ Gmail에서 이메일을 발송하려면 **앱 비밀번호(App Password)**를 �
 
 ## 2. application.properties 설정
 
-`forum_server/src/main/resources/application.properties` 파일을 열고 다음 설정을 수정합니다:
+비밀값은 `forum_server/src/main/resources/application.properties`에 적지 않습니다. 서버 실행 디렉터리의 `application-local.properties`(예시는 `application-local.properties.example`) 또는 환경 변수 `MAIL_USERNAME`, `MAIL_PASSWORD`를 사용합니다.
 
 ```properties
 # 이메일 발송 설정 (Gmail SMTP)
@@ -88,15 +88,11 @@ environment {
 }
 ```
 
-5. `application.properties`에서 환경 변수 참조:
+5. 서비스 환경 변수 `MAIL_PASSWORD`로 주입합니다. `application.properties`는 이미 `spring.mail.password=${MAIL_PASSWORD:}`를 참조합니다.
 
-```properties
-spring.mail.password=${GMAIL_APP_PASSWORD}
-```
+### 방법 2: application-local.properties
 
-### 방법 2: application.properties 직접 수정
-
-개발 환경이나 테스트 환경에서는 `application.properties`에 직접 작성해도 됩니다. 다만 **절대 Git에 커밋하지 마세요!**
+로컬에서는 `application-local.properties`에 메일 계정을 넣습니다. 이 파일은 `.gitignore`에 포함되어 있습니다.
 
 `.gitignore`에 다음을 추가하여 실수로 커밋되는 것을 방지할 수 있습니다:
 

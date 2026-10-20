@@ -1,5 +1,6 @@
     package com.pgh.api_practice.entity;
 
+    import com.fasterxml.jackson.annotation.JsonIgnore;
     import jakarta.persistence.*;
     import lombok.*;
     import org.springframework.data.annotation.CreatedDate;
@@ -24,6 +25,7 @@
         @Column(nullable = false)
         private String username;
 
+        @JsonIgnore
         @Column(nullable = false)
         private String password;
 
@@ -47,6 +49,7 @@
         @Column(name = "email_verified", nullable = false)
         private boolean emailVerified = false;
 
+        @JsonIgnore
         @Column(name = "email_verification_token", length = 255)
         private String emailVerificationToken;
 

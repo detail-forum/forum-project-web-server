@@ -1,8 +1,10 @@
 package com.pgh.api_practice.global;
 
+import com.pgh.api_practice.config.CorsOrigins;
 import com.pgh.api_practice.repository.RefreshTokenRepository;
 import com.pgh.api_practice.service.CustomUserDetailsService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,6 +28,9 @@ public class SecurityConfig {
     private final TokenProvider tokenProvider;
     private final CustomUserDetailsService userDetailsService;
     private final RefreshTokenRepository refreshTokenRepository;
+
+    @Value("${app.cors.allowed-origins:}")
+    private String allowedOrigins;
 
     public SecurityConfig(TokenProvider tokenProvider, CustomUserDetailsService userDetailsService, RefreshTokenRepository refreshTokenRepository) {
         this.tokenProvider = tokenProvider;
@@ -63,20 +68,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 개발 환경과 프로덕션 환경 모두 지원
-        // allowedOriginPatterns 사용 (와일드카드 지원, allowCredentials와 호환)
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:3000",
-            "http://localhost:80",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:80",
-            "http://211.110.30.142",  // 프로덕션 서버 IP (HTTP)
-            "http://211.110.30.142:80",
-            "https://forum.rjsgud.com",  // 프로덕션 HTTPS 도메인
-            "https://www.forum.rjsgud.com",  // www 서브도메인
-            "http://*",  // 모든 HTTP 도메인 허용 (프로덕션 환경 대응)
-            "https://*"  // 모든 HTTPS 도메인 허용 (프로덕션 환경 대응)
-        ));
+        configuration.setAllowedOriginPatterns(CorsOrigins.parse(allowedOrigins));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

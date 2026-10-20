@@ -15,25 +15,16 @@ public class WebConfig {
     @Value("${app.upload.dir:C:/app-data/uploads}")
     private String uploadDir;
 
+    @Value("${app.cors.allowed-origins:}")
+    private String allowedOrigins;
+
     @Bean
     public WebMvcConfigurer webMvcConfigurer() {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**") // 모든 API 경로 허용
-                        // allowedOriginPatterns 사용 (와일드카드 지원)
-                        .allowedOriginPatterns(
-                            "http://localhost:3000",
-                            "http://localhost:80",
-                            "http://127.0.0.1:3000",
-                            "http://127.0.0.1:80",
-                            "http://211.110.30.142",  // 프로덕션 서버 IP (HTTP)
-                            "http://211.110.30.142:80",
-                            "https://forum.rjsgud.com",  // 프로덕션 HTTPS 도메인
-                            "https://www.forum.rjsgud.com",  // www 서브도메인
-                            "http://*",
-                            "https://*"
-                        )
+                registry.addMapping("/**")
+                        .allowedOriginPatterns(CorsOrigins.parse(allowedOrigins).toArray(String[]::new))
                         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true)

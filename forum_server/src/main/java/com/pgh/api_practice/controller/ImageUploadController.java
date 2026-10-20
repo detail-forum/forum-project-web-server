@@ -1,6 +1,7 @@
 package com.pgh.api_practice.controller;
 
 import com.pgh.api_practice.dto.ApiResponse;
+import com.pgh.api_practice.service.ImageFiles;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -10,10 +11,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 @Slf4j
@@ -70,20 +72,25 @@ public class ImageUploadController {
                 Files.createDirectories(uploadPath);
             }
 
-            // 파일 확장자 추출
             String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            // 저장 확장자는 원본 파일명이 아니라 검증된 콘텐츠 타입에서만 만든다.
+            String extension = ImageFiles.extensionFor(contentType);
+            if (extension == null) {
+                return ResponseEntity.badRequest().body(ApiResponse.fail("지원하지 않는 이미지 형식입니다. (JPEG, PNG, GIF, WebP만 가능)"));
             }
 
-            // 고유한 파일명 생성
             String savedFilename = UUID.randomUUID().toString() + extension;
-            Path targetPath = uploadPath.resolve(savedFilename);
+            Path targetPath = ImageFiles.resolveInside(uploadPath, savedFilename);
 
-            // 파일 저장
-            try (var inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            try (InputStream inputStream = file.getInputStream()) {
+                byte[] header = inputStream.readNBytes(16);
+                if (!ImageFiles.looksLikeImage(header, contentType)) {
+                    return ResponseEntity.badRequest().body(ApiResponse.fail("이미지 파일만 업로드 가능합니다."));
+                }
+                try (OutputStream outputStream = Files.newOutputStream(targetPath)) {
+                    outputStream.write(header);
+                    inputStream.transferTo(outputStream);
+                }
             }
             
             // 파일 저장 확인
@@ -128,12 +135,12 @@ public class ImageUploadController {
                 return ResponseEntity.status(401).body(ApiResponse.fail("인증이 필요합니다."));
             }
 
-            // 보안: 파일명에 경로 탐색 문자 제거
-            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            Path filePath;
+            try {
+                filePath = ImageFiles.resolveInside(Paths.get(uploadDir), filename);
+            } catch (IllegalArgumentException ex) {
                 return ResponseEntity.badRequest().body(ApiResponse.fail("잘못된 파일명입니다."));
             }
-
-            Path filePath = Paths.get(uploadDir).resolve(filename);
             
             // 파일 존재 확인
             if (!Files.exists(filePath)) {

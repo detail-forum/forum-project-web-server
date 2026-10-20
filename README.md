@@ -157,16 +157,26 @@ git clone https://github.com/your-username/forum-project.git
 cd forum-project
 ```
 
-#### 2. 데이터베이스 설정
+#### 2. 데이터베이스와 비밀값 설정
 
-MySQL 데이터베이스를 생성하고 `forum_server/src/main/resources/application.properties` 파일을 수정하세요:
+MySQL 데이터베이스를 만든 뒤, 비밀번호와 JWT 시크릿은 저장소에 넣지 않습니다. 서버를 실행하는 디렉터리에 `application-local.properties`를 두거나 환경 변수를 설정하세요. 예시는 `forum_server/application-local.properties.example`입니다.
 
 ```properties
 spring.datasource.url=jdbc:mysql://localhost:3306/your_database
 spring.datasource.username=your_username
 spring.datasource.password=your_password
 spring.jwt.secret=your-secret-key-minimum-32-characters
+spring.mail.username=your-address@gmail.com
+spring.mail.password=your-gmail-app-password
 ```
+
+환경 변수로 넣을 때는 다음 이름을 사용합니다.
+
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (비밀번호는 필수)
+- `JWT_SECRET` (32바이트 이상, 필수. 기존에 발급된 토큰을 유지하려면 이전 시크릿과 같아야 합니다)
+- `MAIL_USERNAME`, `MAIL_PASSWORD` (Gmail 앱 비밀번호)
+
+배포(NSSM 등)에서도 JAR 안에 비밀값을 넣지 말고, 서비스 환경 변수나 실행 디렉터리의 `application-local.properties`로 주입하세요. 예전에 저장소에 들어가 있던 DB 비밀번호와 Gmail 앱 비밀번호는 폐기하고 새로 발급해야 합니다.
 
 #### 3. 백엔드 실행
 

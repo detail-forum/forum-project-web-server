@@ -110,6 +110,8 @@ API 경로, 성공 응답 필드, 로그인 응답(`accessToken`, `refreshToken`
 5. 회원가입 비밀번호 규칙을 변경 API와 맞출지 정한다.
 6. 사용자 검색에서 이메일을 빼도 되는지 `forum-project-app`과 맞춘다.
 
+이 문서 자체는 `cursor/improvement-report-0d6f`, PR https://github.com/detail-forum/forum-project-web-server/pull/9 이다.
+
 ## 5. 검증
 
 `forum_server`에서 `./gradlew test`가 통과했다. 추가한 테스트는 예외 상태 코드, 사용자 JSON에서 비밀번호/인증 토큰 제외, 액세스와 리프레시 토큰 구분, 리프레시 토큰의 필터 거부, 재발급 거부, 로그아웃 시 토큰 삭제, 이미지 확장자/매직 바이트/경로 이탈, CORS 기본 출처다. 브라우저로 운영 사이트에 로그인하는 검증은 이 환경에 운영 DB와 비밀값이 없어 하지 않았다.

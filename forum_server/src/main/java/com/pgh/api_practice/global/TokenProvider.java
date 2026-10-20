@@ -22,26 +22,31 @@ public class TokenProvider {
         this.key = Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
-    // 기존 AuthService 호환용
+    // 기존 AuthService 호환용. typ 클레임만 추가하고 subject/만료 의미는 같다.
     public String createAccessToken(String username) {
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + ACCESS_TOKEN_VALIDITY);
-
-        return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(now)
-                .setExpiration(expiry)
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+        return buildToken(username, "access", ACCESS_TOKEN_VALIDITY);
     }
 
-    // 리프레시 토큰 생성 (userId 불필요)
     public String createRefreshToken(String username) {
+        return buildToken(username, "refresh", REFRESH_TOKEN_VALIDITY);
+    }
+
+    /** typ 클레임. 예전 토큰은 null이다. */
+    public String getTokenType(String token) {
+        return parseClaims(token).get("typ", String.class);
+    }
+
+    public boolean isRefreshToken(String token) {
+        return "refresh".equals(getTokenType(token));
+    }
+
+    private String buildToken(String username, String type, long validityMs) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + REFRESH_TOKEN_VALIDITY);
+        Date expiry = new Date(now.getTime() + validityMs);
 
         return Jwts.builder()
                 .setSubject(username)
+                .claim("typ", type)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key, SignatureAlgorithm.HS256)

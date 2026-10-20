@@ -1,5 +1,6 @@
 package com.pgh.api_practice.global;
 
+import com.pgh.api_practice.repository.RefreshTokenRepository;
 import com.pgh.api_practice.service.CustomUserDetailsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -24,10 +25,12 @@ public class SecurityConfig {
 
     private final TokenProvider tokenProvider;
     private final CustomUserDetailsService userDetailsService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
-    public SecurityConfig(TokenProvider tokenProvider, CustomUserDetailsService userDetailsService) {
+    public SecurityConfig(TokenProvider tokenProvider, CustomUserDetailsService userDetailsService, RefreshTokenRepository refreshTokenRepository) {
         this.tokenProvider = tokenProvider;
         this.userDetailsService = userDetailsService;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @Bean
@@ -46,7 +49,7 @@ public class SecurityConfig {
                 // 세션 비활성화
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // JWT 필터 추가
-                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userDetailsService), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userDetailsService, refreshTokenRepository), UsernamePasswordAuthenticationFilter.class)
                 // WebSocket 경로 명시적으로 허용
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/ws/**", "/ws").permitAll() // WebSocket 엔드포인트 허용

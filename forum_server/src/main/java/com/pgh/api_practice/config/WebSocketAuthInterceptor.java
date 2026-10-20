@@ -1,6 +1,7 @@
 package com.pgh.api_practice.config;
 
 import com.pgh.api_practice.global.TokenProvider;
+import com.pgh.api_practice.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -22,6 +23,7 @@ import java.util.List;
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private final TokenProvider tokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -47,7 +49,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
             String token = authHeader.substring(7);
 
-            if (!tokenProvider.validateToken(token)) {
+            if (!tokenProvider.validateToken(token) || isRefreshCredential(token)) {
                 log.error("STOMP CONNECT 실패: 토큰 유효하지 않음");
                 throw new IllegalArgumentException("WebSocket 토큰이 유효하지 않습니다.");
             }
@@ -66,5 +68,13 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         }
 
         return message;
+    }
+
+    private boolean isRefreshCredential(String token) {
+        if (tokenProvider.isRefreshToken(token)) {
+            return true;
+        }
+        return tokenProvider.getTokenType(token) == null
+                && refreshTokenRepository.findByRefreshToken(token).isPresent();
     }
 }

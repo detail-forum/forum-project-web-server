@@ -7,8 +7,11 @@ import com.pgh.api_practice.dto.auth.RegisterRequestDTO;
 import com.pgh.api_practice.dto.auth.LoginResponseDTO;
 import com.pgh.api_practice.dto.auth.RefreshTokenRequestDTO;
 import com.pgh.api_practice.entity.Users;
+import com.pgh.api_practice.exception.RefreshTokenExpiredException;
+import com.pgh.api_practice.exception.ResourceNotFoundException;
 import com.pgh.api_practice.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.pgh.api_practice.dto.ApiResponse;
@@ -22,6 +25,9 @@ import jakarta.validation.Valid;
 public class AuthController {
 
     private final AuthService authService;
+
+    @Value("${app.cookie.secure:false}")
+    private boolean secureCookie;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<Void>> register(
@@ -37,23 +43,7 @@ public class AuthController {
             HttpServletResponse response
     ) {
         LoginResponseDTO result = authService.login(loginRequestDTO);
-        
-        // HttpOnly 쿠키로 토큰 설정 (보안 강화)
-        Cookie accessTokenCookie = new Cookie("accessToken", result.getAccessToken());
-        accessTokenCookie.setHttpOnly(true);
-        accessTokenCookie.setSecure(false); // HTTPS 환경에서는 true로 변경
-        accessTokenCookie.setPath("/");
-        accessTokenCookie.setMaxAge(60 * 60 * 24); // 1일
-        accessTokenCookie.setAttribute("SameSite", "Lax"); // CSRF 방지
-        response.addCookie(accessTokenCookie);
-        
-        Cookie refreshTokenCookie = new Cookie("refreshToken", result.getRefreshToken());
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setSecure(false); // HTTPS 환경에서는 true로 변경
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(60 * 60 * 24 * 7); // 7일
-        refreshTokenCookie.setAttribute("SameSite", "Lax"); // CSRF 방지
-        response.addCookie(refreshTokenCookie);
+        writeTokenCookies(response, result);
         
         return ResponseEntity.ok(ApiResponse.ok(result, "로그인이 완료되었습니다"));
     }
@@ -92,21 +82,7 @@ public class AuthController {
         requestDTO.setRefreshToken(refreshToken);
         
         LoginResponseDTO result = authService.refreshToken(requestDTO);
-        
-        // HttpOnly 쿠키로 새 토큰 설정
-        Cookie accessTokenCookie = new Cookie("accessToken", result.getAccessToken());
-        accessTokenCookie.setHttpOnly(true);
-        accessTokenCookie.setSecure(false); // HTTPS 환경에서는 true로 변경
-        accessTokenCookie.setPath("/");
-        accessTokenCookie.setMaxAge(60 * 60 * 24); // 1일
-        response.addCookie(accessTokenCookie);
-        
-        Cookie refreshTokenCookie = new Cookie("refreshToken", result.getRefreshToken());
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setSecure(false); // HTTPS 환경에서는 true로 변경
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(60 * 60 * 24 * 7); // 7일
-        response.addCookie(refreshTokenCookie);
+        writeTokenCookies(response, result);
         
         return ResponseEntity.ok(ApiResponse.ok(result, "토큰이 재발급되었습니다."));
     }
@@ -114,7 +90,8 @@ public class AuthController {
     /** ✅ 인증 상태 확인 및 토큰 정보 반환 (초기화용) */
     @GetMapping("/verify")
     public ResponseEntity<ApiResponse<LoginResponseDTO>> verifyAuth(
-            jakarta.servlet.http.HttpServletRequest request
+            jakarta.servlet.http.HttpServletRequest request,
+            HttpServletResponse response
     ) {
         // 쿠키에서 토큰 읽기
         jakarta.servlet.http.Cookie[] cookies = request.getCookies();
@@ -136,11 +113,17 @@ public class AuthController {
             return ResponseEntity.status(401)
                     .body(ApiResponse.fail("인증 토큰이 없습니다."));
         }
-        
-        // 토큰 유효성 검증은 JWT 필터에서 이미 수행됨
-        // 여기서는 토큰 정보만 반환
-        LoginResponseDTO result = new LoginResponseDTO(accessToken, refreshToken);
-        return ResponseEntity.ok(ApiResponse.ok(result, "인증 상태 확인 성공"));
+
+        try {
+            LoginResponseDTO result = authService.verifyOrRefresh(accessToken, refreshToken);
+            if (!accessToken.equals(result.getAccessToken()) || !refreshToken.equals(result.getRefreshToken())) {
+                writeTokenCookies(response, result);
+            }
+            return ResponseEntity.ok(ApiResponse.ok(result, "인증 상태 확인 성공"));
+        } catch (RefreshTokenExpiredException | ResourceNotFoundException ex) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.fail("인증 토큰이 유효하지 않습니다."));
+        }
     }
     
     /** ✅ 현재 사용자 정보 조회 */
@@ -171,23 +154,49 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("회원탈퇴 성공"));
     }
     
-    /** ✅ 로그아웃 (쿠키 삭제) */
+    /** ✅ 로그아웃 (쿠키 삭제 + 현재 리프레시 토큰 폐기) */
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse response) {
-        // 쿠키 삭제
-        Cookie accessTokenCookie = new Cookie("accessToken", null);
-        accessTokenCookie.setHttpOnly(true);
-        accessTokenCookie.setPath("/");
-        accessTokenCookie.setMaxAge(0);
-        response.addCookie(accessTokenCookie);
-        
-        Cookie refreshTokenCookie = new Cookie("refreshToken", null);
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(0);
-        response.addCookie(refreshTokenCookie);
+    public ResponseEntity<ApiResponse<Void>> logout(
+            jakarta.servlet.http.HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        authService.revokeRefreshToken(readCookie(request, "refreshToken"));
+        clearTokenCookies(response);
         
         return ResponseEntity.ok(ApiResponse.ok("로그아웃 성공"));
+    }
+
+    private void writeTokenCookies(HttpServletResponse response, LoginResponseDTO tokens) {
+        response.addCookie(tokenCookie("accessToken", tokens.getAccessToken(), 60 * 60 * 24));
+        response.addCookie(tokenCookie("refreshToken", tokens.getRefreshToken(), 60 * 60 * 24 * 7));
+    }
+
+    private void clearTokenCookies(HttpServletResponse response) {
+        response.addCookie(tokenCookie("accessToken", "", 0));
+        response.addCookie(tokenCookie("refreshToken", "", 0));
+    }
+
+    private Cookie tokenCookie(String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(secureCookie);
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAge);
+        cookie.setAttribute("SameSite", "Lax");
+        return cookie;
+    }
+
+    private String readCookie(jakarta.servlet.http.HttpServletRequest request, String name) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (name.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 
     /** ✅ 이메일 인증 처리 */

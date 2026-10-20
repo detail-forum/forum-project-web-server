@@ -108,6 +108,7 @@ public class AuthService {
         RefreshToken rt = RefreshToken.builder()
                 .refreshToken(refreshToken)
                 .expiryDateTime(LocalDateTime.now().plusDays(7))
+                .userId(user.getId())
                 .build();
         refreshTokenRepository.save(rt);
 
@@ -132,8 +133,13 @@ public class AuthService {
             throw new RefreshTokenExpiredException("리프레시 토큰이 만료되었습니다.");
         }
 
-        // 4) RefreshToken에서 username 추출
+        // 4) RefreshToken에서 username 추출. 탈퇴 계정은 재발급하지 않는다.
         String username = tokenProvider.getUsername(dto.getRefreshToken());
+        if ("access".equals(tokenProvider.getTokenType(dto.getRefreshToken()))) {
+            throw new RefreshTokenExpiredException("리프레시 토큰이 만료되었습니다.");
+        }
+        Users user = authRepository.findByUsername(username)
+                .orElseThrow(() -> new RefreshTokenExpiredException("리프레시 토큰이 만료되었습니다."));
 
         // 5) 새로운 AccessToken 생성
         String newAccessToken = tokenProvider.createAccessToken(username);
@@ -146,10 +152,46 @@ public class AuthService {
         RefreshToken newRefreshTokenEntity = RefreshToken.builder()
                 .refreshToken(newRefreshToken)
                 .expiryDateTime(LocalDateTime.now().plusDays(7))
+                .userId(user.getId())
                 .build();
         refreshTokenRepository.save(newRefreshTokenEntity);
 
         return new LoginResponseDTO(newAccessToken, newRefreshToken);
+    }
+
+    /**
+     * 액세스 토큰이 유효하면 그대로 돌려주고, 아니면 리프레시 토큰으로 재발급한다.
+     * 응답 형태는 로그인과 같다.
+     */
+    @Transactional
+    public LoginResponseDTO verifyOrRefresh(String accessToken, String refreshTokenValue) {
+        if (isUsableAccessToken(accessToken)) {
+            return new LoginResponseDTO(accessToken, refreshTokenValue);
+        }
+        RefreshTokenRequestDTO request = new RefreshTokenRequestDTO();
+        request.setRefreshToken(refreshTokenValue);
+        return refreshToken(request);
+    }
+
+    /** 로그아웃 시 현재 리프레시 토큰만 폐기한다. 다른 기기의 세션은 유지된다. */
+    @Transactional
+    public void revokeRefreshToken(String refreshTokenValue) {
+        if (refreshTokenValue == null || refreshTokenValue.isBlank()) {
+            return;
+        }
+        refreshTokenRepository.findByRefreshToken(refreshTokenValue)
+                .ifPresent(refreshTokenRepository::delete);
+    }
+
+    private boolean isUsableAccessToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank() || !tokenProvider.validateToken(accessToken)) {
+            return false;
+        }
+        if (tokenProvider.isRefreshToken(accessToken)) {
+            return false;
+        }
+        return tokenProvider.getTokenType(accessToken) != null
+                || refreshTokenRepository.findByRefreshToken(accessToken).isEmpty();
     }
 
     /** ✅ 현재 사용자 정보 조회 */
@@ -226,9 +268,7 @@ public class AuthService {
         Users user = getCurrentUser();
         user.setDeleted(true);
         authRepository.save(user);
-        
-        // 모든 리프레시 토큰 삭제
-        // (선택적 - 보안을 위해)
+        refreshTokenRepository.deleteByUserId(user.getId());
     }
 
     /** ✅ 이메일 인증 처리 */

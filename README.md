@@ -175,6 +175,7 @@ spring.mail.password=your-gmail-app-password
 - `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (비밀번호는 필수)
 - `JWT_SECRET` (32바이트 이상, 필수. 기존에 발급된 토큰을 유지하려면 이전 시크릿과 같아야 합니다)
 - `MAIL_USERNAME`, `MAIL_PASSWORD` (Gmail 앱 비밀번호)
+- `APP_COOKIE_SECURE=true` (HTTPS 배포에서 인증 쿠키에 Secure 속성을 붙임. 로컬 HTTP는 기본값 false)
 
 배포(NSSM 등)에서도 JAR 안에 비밀값을 넣지 말고, 서비스 환경 변수나 실행 디렉터리의 `application-local.properties`로 주입하세요. 예전에 저장소에 들어가 있던 DB 비밀번호와 Gmail 앱 비밀번호는 폐기하고 새로 발급해야 합니다.
 

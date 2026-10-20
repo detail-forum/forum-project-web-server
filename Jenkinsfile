@@ -103,7 +103,7 @@ pipeline {
                 dir('forum_server') {
                     bat '''
                         echo ===== Backend Build =====
-                        gradlew.bat clean build -x test
+                        gradlew.bat clean build
                     '''
                 }
             }

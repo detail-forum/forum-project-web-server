@@ -1,8 +1,8 @@
 package com.pgh.api_practice.global;
 
 import com.pgh.api_practice.dto.ApiResponse;
-import com.pgh.api_practice.dto.ValidationErrorDTO;
 import com.pgh.api_practice.exception.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,12 +18,13 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalApiResponseHandler {
 
-    // 400: DTO @Valid 검증 실패
+    // 400: DTO @Valid 검증 실패. 다른 API와 같이 ApiResponse JSON으로 반환한다.
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<String> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
 
         for (var error : ex.getBindingResult().getAllErrors()) {
@@ -34,13 +35,7 @@ public class GlobalApiResponseHandler {
             errors.put(field, msg);
         }
 
-        ValidationErrorDTO dto = ValidationErrorDTO.builder()
-                .message("요청 값이 올바르지 않습니다.")
-                .errors(errors)
-                .build();
-
-        // 문자열 형태로 반환 (toString() 사용)
-        return ResponseEntity.badRequest().body(dto.toString());
+        return ResponseEntity.badRequest().body(ApiResponse.fail("요청 값이 올바르지 않습니다.", errors));
     }
 
 
@@ -50,38 +45,29 @@ public class GlobalApiResponseHandler {
         return ResponseEntity.badRequest().body(ApiResponse.fail("요청 본문을 읽을 수 없습니다."));
     }
 
-    // 404: 서비스 계층에서 존재하지 않는 리소스 등
+    // 400: 잘못된 요청 값. 없는 리소스는 ResourceNotFoundException(404)을 쓴다.
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(404).body(ApiResponse.fail(ex.getMessage() != null ? ex.getMessage() : "대상을 찾을 수 없습니다."));
+        return ResponseEntity.badRequest().body(ApiResponse.fail(ex.getMessage() != null ? ex.getMessage() : "요청 값이 올바르지 않습니다."));
+    }
+
+    // 400: 가입 제한, 중복 가입처럼 호출자가 고칠 수 있는 상태
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.fail(ex.getMessage() != null ? ex.getMessage() : "요청을 처리할 수 없습니다."));
+    }
+
+    // 500: 예상치 못한 널. 인증 실패로 위장하지 않는다.
+    @ExceptionHandler(NullPointerException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNullPointer(NullPointerException ex) {
+        log.error("처리되지 않은 NullPointerException", ex);
+        return ResponseEntity.internalServerError().body(ApiResponse.fail("서버 내부 오류가 발생했습니다."));
     }
 
     // 400: 커스텀 이미 유저있다
     @ExceptionHandler(UserAlreadyExistException.class)
     public ResponseEntity<ApiResponse<Void>> handleUserAlreadyExist(UserAlreadyExistException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.fail(ex.getMessage()));
-    }
-
-    // 500: NullPointerException 처리
-    @ExceptionHandler(NullPointerException.class)
-    public ResponseEntity<ApiResponse<Void>> handleNullPointer(NullPointerException ex) {
-        ex.printStackTrace(); // 디버깅을 위한 스택 트레이스 출력
-        return ResponseEntity.status(401).body(ApiResponse.fail("인증이 필요합니다."));
-    }
-
-    // 500: IllegalStateException 처리 (예상치 못한 상태)
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
-        ex.printStackTrace(); // 디버깅을 위한 스택 트레이스 출력
-        return ResponseEntity.status(500).body(ApiResponse.fail(ex.getMessage() != null ? ex.getMessage() : "서버 내부 오류가 발생했습니다."));
-    }
-
-    // 500: 기타 모든 예외
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
-        // 로그는 여기서 찍으세요 (ex.getMessage(), stacktrace 등)
-        ex.printStackTrace(); // 디버깅을 위한 스택 트레이스 출력
-        return ResponseEntity.internalServerError().body(ApiResponse.fail("서버 내부 오류가 발생했습니다: " + ex.getMessage()));
     }
 
     //리프레시 토큰 만료시 처리
@@ -135,15 +121,15 @@ public class GlobalApiResponseHandler {
     // 404: 핸들러를 찾을 수 없음 (NoHandlerFoundException)
     @ExceptionHandler(NoHandlerFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoHandlerFound(NoHandlerFoundException ex) {
-        ex.printStackTrace();
+        log.debug("핸들러 없음: {}", ex.getRequestURL());
         return ResponseEntity.status(404).body(ApiResponse.fail("요청한 경로를 찾을 수 없습니다: " + ex.getRequestURL()));
     }
 
     // 404: 정적 리소스를 찾을 수 없음 (NoResourceFoundException) - 컨트롤러 매핑 실패 시 발생
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException ex) {
-        ex.printStackTrace();
         String resourcePath = ex.getResourcePath();
+        log.debug("리소스 없음: {}", resourcePath);
         // /api/로 시작하는 경로는 API 엔드포인트이므로 더 명확한 메시지 제공
         if (resourcePath != null && resourcePath.startsWith("/api/")) {
             return ResponseEntity.status(404).body(ApiResponse.fail("API 엔드포인트를 찾을 수 없습니다: " + resourcePath));
@@ -154,22 +140,21 @@ public class GlobalApiResponseHandler {
     // NonUniqueResultException 처리 (JPA 쿼리에서 여러 결과 반환 시)
     @ExceptionHandler(org.hibernate.NonUniqueResultException.class)
     public ResponseEntity<ApiResponse<Void>> handleNonUniqueResultException(org.hibernate.NonUniqueResultException ex) {
-        ex.printStackTrace();
+        log.error("조회 결과가 중복되었습니다", ex);
         return ResponseEntity.status(500).body(ApiResponse.fail("데이터 중복 오류가 발생했습니다. 관리자에게 문의해주세요."));
     }
 
-    // 500: RuntimeException 처리
+    // 500: RuntimeException 처리. 원인 메시지는 로그에만 남긴다.
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
-        ex.printStackTrace();
-        // ResourceNotFoundException은 이미 처리되므로 여기서는 제외
-        if (ex instanceof ResourceNotFoundException) {
-            return ResponseEntity.status(404).body(ApiResponse.fail(ex.getMessage()));
-        }
-        // NonUniqueResultException도 이미 처리되므로 여기서는 제외
-        if (ex instanceof org.hibernate.NonUniqueResultException) {
-            return ResponseEntity.status(500).body(ApiResponse.fail("데이터 중복 오류가 발생했습니다. 관리자에게 문의해주세요."));
-        }
-        return ResponseEntity.status(500).body(ApiResponse.fail("서버 내부 오류가 발생했습니다: " + ex.getMessage()));
+        log.error("처리되지 않은 RuntimeException", ex);
+        return ResponseEntity.status(500).body(ApiResponse.fail("서버 내부 오류가 발생했습니다."));
+    }
+
+    // 500: 기타 모든 예외
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception ex) {
+        log.error("처리되지 않은 예외", ex);
+        return ResponseEntity.internalServerError().body(ApiResponse.fail("서버 내부 오류가 발생했습니다."));
     }
 }

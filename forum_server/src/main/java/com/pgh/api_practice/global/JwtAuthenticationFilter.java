@@ -10,11 +10,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import com.pgh.api_practice.repository.RefreshTokenRepository;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Set;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -22,16 +22,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final TokenProvider tokenProvider;          // validateToken, getUsername 제공
     private final UserDetailsService userDetailsService;
-
-    private static final Set<String> SKIP_PATHS = Set.of(
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/reissue",
-            "/swagger-ui",
-            "/swagger-ui.html",
-            "/api-docs",
-            "/v3/api-docs"
-    );
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Override
     protected void doFilterInternal(
@@ -44,8 +35,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // 1) Authorization 헤더에서 Bearer 토큰 추출
             String token = resolveToken(request);
 
-            // 2) 토큰 존재 + 유효성 검증
-            if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
+            // 2) 토큰 존재 + 유효성 검증. 리프레시 토큰은 API 인증에 쓰지 않는다.
+            if (StringUtils.hasText(token) && tokenProvider.validateToken(token) && !isRefreshCredential(token)) {
 
                 // 3) 토큰에서 username 뽑아 UserDetails 로드
                 String username = tokenProvider.getUsername(token);
@@ -90,5 +81,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         
         return null;
+    }
+
+    private boolean isRefreshCredential(String token) {
+        if (tokenProvider.isRefreshToken(token)) {
+            return true;
+        }
+        // typ이 없는 예전 리프레시 토큰은 DB에 저장된 값으로만 구분한다.
+        return tokenProvider.getTokenType(token) == null
+                && refreshTokenRepository.findByRefreshToken(token).isPresent();
     }
 }

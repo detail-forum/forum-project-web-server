@@ -257,9 +257,10 @@ public class AuthService {
             throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
         }
         
-        // 새 비밀번호 설정
+        // 새 비밀번호 설정. 이미 발급된 리프레시 토큰은 더 이상 재발급에 쓰지 못한다.
         user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         authRepository.save(user);
+        refreshTokenRepository.deleteByUserId(user.getId());
     }
 
     /** ✅ 회원탈퇴 */

@@ -10,7 +10,6 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -788,7 +787,7 @@ public class GroupService {
             throw new ApplicationUnauthorizedException("관리자만 관리자 채팅방을 조회할 수 있습니다.");
         }
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageWindows.request(page, size);
         List<GroupChatMessage> messages =
                 groupChatMessageRepository.findMessagesAsc(roomId, pageable);
 

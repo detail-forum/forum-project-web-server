@@ -3,9 +3,9 @@ package com.pgh.api_practice.controller;
 import com.pgh.api_practice.dto.ApiResponse;
 import com.pgh.api_practice.dto.ChatSearchMessageDTO;
 import com.pgh.api_practice.service.ChatSearchService;
+import com.pgh.api_practice.service.PageWindows;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -27,7 +27,7 @@ public class ChatController {
             throw new IllegalArgumentException("검색어(query)는 필수입니다.");
         }
 
-        PageRequest pageable = PageRequest.of(page, size);
+        var pageable = PageWindows.request(page, size);
 
         Page<ChatSearchMessageDTO> result =
                 chatSearchService.search(query.trim(), type, chatRoomId, pageable);

@@ -321,11 +321,7 @@ public class PostService {
         }
 
         // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), allPosts.size());
-        List<PostListDTO> pagedPosts = allPosts.subList(start, end);
-
-        return new PageImpl<>(pagedPosts, pageable, allPosts.size());
+        return PageWindows.slice(allPosts, pageable);
     }
 
     /** ✅ 내 게시글 목록 (posts + group_posts) */
@@ -348,13 +344,13 @@ public class PostService {
         // posts 테이블에서 조회
         Page<Post> postsPage;
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), pageable);
+            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), Pageable.unpaged());
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByViewsDesc(user.getId(), pageable);
+            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByViewsDesc(user.getId(), Pageable.unpaged());
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByLikesDesc(user.getId(), pageable);
+            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByLikesDesc(user.getId(), Pageable.unpaged());
         } else {
-            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), pageable);
+            postsPage = postRepository.findAllByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), Pageable.unpaged());
         }
 
         List<PostListDTO> postList = postsPage.getContent().stream()
@@ -407,13 +403,13 @@ public class PostService {
         // group_posts 테이블에서 조회
         Page<GroupPost> groupPostsPage;
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), pageable);
+            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), Pageable.unpaged());
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByViewsDesc(user.getId(), pageable);
+            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByViewsDesc(user.getId(), Pageable.unpaged());
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByLikesDesc(user.getId(), pageable);
+            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByLikesDesc(user.getId(), Pageable.unpaged());
         } else {
-            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), pageable);
+            groupPostsPage = groupPostRepository.findByUserIdAndIsDeletedFalseOrderByCreatedTimeDesc(user.getId(), Pageable.unpaged());
         }
 
         List<PostListDTO> groupPostList = groupPostsPage.getContent().stream()
@@ -469,11 +465,7 @@ public class PostService {
         }
 
         // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), allPosts.size());
-        List<PostListDTO> pagedPosts = allPosts.subList(start, end);
-
-        return new PageImpl<>(pagedPosts, pageable, allPosts.size());
+        return PageWindows.slice(allPosts, pageable);
     }
 
     /** ✅ 태그로 게시글 목록 조회 */
@@ -491,13 +483,13 @@ public class PostService {
         Page<Post> posts;
 
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, Pageable.unpaged());
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByViewsDesc(postIds, pageable);
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByViewsDesc(postIds, Pageable.unpaged());
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByLikesDesc(postIds, pageable);
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByLikesDesc(postIds, Pageable.unpaged());
         } else {
-            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+            posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, Pageable.unpaged());
         }
 
         List<PostListDTO> filteredPosts = posts.getContent().stream()
@@ -560,11 +552,7 @@ public class PostService {
         }
 
         // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), filteredPosts.size());
-        List<PostListDTO> pagedPosts = filteredPosts.subList(start, end);
-
-        return new PageImpl<>(pagedPosts, pageable, filteredPosts.size());
+        return PageWindows.slice(filteredPosts, pageable);
     }
 
     /** ✅ 내 게시글 목록 - 태그 필터 (posts + group_posts) */
@@ -590,13 +578,13 @@ public class PostService {
         if (!postIds.isEmpty()) {
             Page<Post> posts;
             if ("RESENT".equalsIgnoreCase(sortType)) {
-                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, Pageable.unpaged());
             } else if ("HITS".equalsIgnoreCase(sortType)) {
-                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByViewsDesc(postIds, pageable);
+                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByViewsDesc(postIds, Pageable.unpaged());
             } else if ("LIKES".equalsIgnoreCase(sortType)) {
-                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByLikesDesc(postIds, pageable);
+                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByLikesDesc(postIds, Pageable.unpaged());
             } else {
-                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, pageable);
+                posts = postRepository.findAllByIdInAndIsDeletedFalseOrderByCreatedTimeDesc(postIds, Pageable.unpaged());
             }
 
             postList = posts.getContent().stream()
@@ -711,11 +699,7 @@ public class PostService {
         }
 
         // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), allPosts.size());
-        List<PostListDTO> pagedPosts = allPosts.subList(start, end);
-
-        return new PageImpl<>(pagedPosts, pageable, allPosts.size());
+        return PageWindows.slice(allPosts, pageable);
     }
 
     /** ✅ 게시글 좋아요 추가/삭제 */
@@ -958,13 +942,13 @@ public class PostService {
         Page<Post> posts;
 
         if ("RESENT".equalsIgnoreCase(sortType)) {
-            posts = postRepository.searchPostsByKeyword(searchKeyword, pageable);
+            posts = postRepository.searchPostsByKeyword(searchKeyword, Pageable.unpaged());
         } else if ("HITS".equalsIgnoreCase(sortType)) {
-            posts = postRepository.searchPostsByKeywordOrderByViews(searchKeyword, pageable);
+            posts = postRepository.searchPostsByKeywordOrderByViews(searchKeyword, Pageable.unpaged());
         } else if ("LIKES".equalsIgnoreCase(sortType)) {
-            posts = postRepository.searchPostsByKeywordOrderByLikes(searchKeyword, pageable);
+            posts = postRepository.searchPostsByKeywordOrderByLikes(searchKeyword, Pageable.unpaged());
         } else {
-            posts = postRepository.searchPostsByKeyword(searchKeyword, pageable);
+            posts = postRepository.searchPostsByKeyword(searchKeyword, Pageable.unpaged());
         }
 
         List<PostListDTO> filteredPosts = posts.getContent().stream()
@@ -1024,11 +1008,7 @@ public class PostService {
         }
 
         // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), filteredPosts.size());
-        List<PostListDTO> pagedPosts = filteredPosts.subList(start, end);
-
-        return new PageImpl<>(pagedPosts, pageable, filteredPosts.size());
+        return PageWindows.slice(filteredPosts, pageable);
     }
 
     /** ✅ 모임별 게시글 목록 조회 */
@@ -1077,27 +1057,27 @@ public class PostService {
             // 공개/비공개 필터링
             if ("RESENT".equalsIgnoreCase(sortType)) {
                 postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByCreatedTimeDesc(groupId,
-                        isPublicFilter, pageable);
+                        isPublicFilter, Pageable.unpaged());
             } else if ("HITS".equalsIgnoreCase(sortType)) {
                 postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByViewsDesc(groupId, isPublicFilter,
-                        pageable);
+                        Pageable.unpaged());
             } else if ("LIKES".equalsIgnoreCase(sortType)) {
                 postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByLikesDesc(groupId, isPublicFilter,
-                        pageable);
+                        Pageable.unpaged());
             } else {
                 postsFromPostsTable = postRepository.findByGroupIdAndIsPublicOrderByCreatedTimeDesc(groupId,
-                        isPublicFilter, pageable);
+                        isPublicFilter, Pageable.unpaged());
             }
         } else {
             // 필터링 없이 모든 게시글 조회 (멤버만)
             if ("RESENT".equalsIgnoreCase(sortType)) {
-                postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+                postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, Pageable.unpaged());
             } else if ("HITS".equalsIgnoreCase(sortType)) {
-                postsFromPostsTable = postRepository.findByGroupIdOrderByViewsDesc(groupId, pageable);
+                postsFromPostsTable = postRepository.findByGroupIdOrderByViewsDesc(groupId, Pageable.unpaged());
             } else if ("LIKES".equalsIgnoreCase(sortType)) {
-                postsFromPostsTable = postRepository.findByGroupIdOrderByLikesDesc(groupId, pageable);
+                postsFromPostsTable = postRepository.findByGroupIdOrderByLikesDesc(groupId, Pageable.unpaged());
             } else {
-                postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, pageable);
+                postsFromPostsTable = postRepository.findByGroupIdOrderByCreatedTimeDesc(groupId, Pageable.unpaged());
             }
         }
 
@@ -1105,9 +1085,9 @@ public class PostService {
         Page<GroupPost> groupPosts;
         if (isPublicFilter != null) {
             groupPosts = groupPostRepository.findByGroupIdAndIsPublicAndIsDeletedFalseOrderByCreatedTimeDesc(groupId,
-                    isPublicFilter, pageable);
+                    isPublicFilter, Pageable.unpaged());
         } else {
-            groupPosts = groupPostRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedTimeDesc(groupId, pageable);
+            groupPosts = groupPostRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedTimeDesc(groupId, Pageable.unpaged());
         }
 
         // 3. 두 결과를 합쳐서 PostListDTO로 변환
@@ -1189,10 +1169,6 @@ public class PostService {
         }
 
         // 페이지네이션 적용
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), allPosts.size());
-        List<PostListDTO> pagedPosts = allPosts.subList(start, end);
-
-        return new PageImpl<>(pagedPosts, pageable, allPosts.size());
+        return PageWindows.slice(allPosts, pageable);
     }
 }

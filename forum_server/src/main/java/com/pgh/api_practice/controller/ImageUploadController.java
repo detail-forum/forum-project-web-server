@@ -115,7 +115,7 @@ public class ImageUploadController {
 
         } catch (IOException e) {
             log.error("이미지 업로드 실패", e);
-            return ResponseEntity.status(500).body(ApiResponse.fail("이미지 업로드 중 오류가 발생했습니다: " + e.getMessage()));
+            return ResponseEntity.status(500).body(ApiResponse.fail("이미지 업로드 중 오류가 발생했습니다."));
         } catch (Exception e) {
             log.error("이미지 업로드 실패", e);
             return ResponseEntity.status(500).body(ApiResponse.fail("이미지 업로드 중 오류가 발생했습니다."));

@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @AllArgsConstructor
@@ -214,37 +215,54 @@ public class AuthService {
         
         boolean modified = false;
         
-        if (dto.getProfileImageUrl() != null && !dto.getProfileImageUrl().equals(user.getProfileImageUrl())) {
-            user.setProfileImageUrl(dto.getProfileImageUrl());
-            modified = true;
-        }
-        
-        if (dto.getEmail() != null && !dto.getEmail().equals(user.getEmail())) {
-            // 이메일 중복 확인
-            if (authRepository.existsByEmail(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
-                throw new UserAlreadyExistException("이미 사용 중인 이메일입니다.");
+        if (dto.getProfileImageUrl() != null) {
+            String imageUrl = ProfileFields.profileImageUrl(dto.getProfileImageUrl());
+            if (!Objects.equals(imageUrl, storedOrNull(user.getProfileImageUrl()))) {
+                user.setProfileImageUrl(imageUrl);
+                modified = true;
             }
-            user.setEmail(dto.getEmail());
-            modified = true;
         }
         
-        if (dto.getGithubLink() != null && !dto.getGithubLink().equals(user.getGithubLink())) {
-            user.setGithubLink(dto.getGithubLink());
-            modified = true;
-        }
-        
-        if (dto.getNickname() != null && !dto.getNickname().equals(user.getNickname())) {
-            // 닉네임 중복 확인
-            if (authRepository.existsByNickname(dto.getNickname()) && !dto.getNickname().equals(user.getNickname())) {
-                throw new UserAlreadyExistException("이미 사용 중인 닉네임입니다.");
+        if (dto.getEmail() != null) {
+            String email = ProfileFields.email(dto.getEmail());
+            if (!email.equals(user.getEmail())) {
+                if (authRepository.existsByEmail(email)) {
+                    throw new UserAlreadyExistException("이미 사용 중인 이메일입니다.");
+                }
+                user.setEmail(email);
+                modified = true;
             }
-            user.setNickname(dto.getNickname());
-            modified = true;
+        }
+        
+        if (dto.getGithubLink() != null) {
+            String githubLink = ProfileFields.githubLink(dto.getGithubLink());
+            if (!Objects.equals(githubLink, storedOrNull(user.getGithubLink()))) {
+                user.setGithubLink(githubLink);
+                modified = true;
+            }
+        }
+        
+        if (dto.getNickname() != null) {
+            String nickname = ProfileFields.nickname(dto.getNickname());
+            if (!nickname.equals(user.getNickname())) {
+                if (authRepository.existsByNickname(nickname)) {
+                    throw new UserAlreadyExistException("이미 사용 중인 닉네임입니다.");
+                }
+                user.setNickname(nickname);
+                modified = true;
+            }
         }
         
         if (modified) {
             authRepository.save(user);
         }
+    }
+
+    private static String storedOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
     }
 
     /** ✅ 비밀번호 변경 */

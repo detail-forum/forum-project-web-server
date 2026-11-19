@@ -1,0 +1,133 @@
+# 포럼 CI 인프라: 빌드 Pod용 네임스페이스, 이미지 레지스트리, 권한.
+# 적용: kubectl apply -f k8s/ci.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci
+---
+# 이미지 레지스트리. 빌드 Pod는 registry.ci.svc:5000으로 올리고,
+# 노드의 containerd는 hostPort로 localhost:5000에서 받는다.
+# shortcut: 오래된 이미지를 지우지 않는다. 디스크가 차면 registry garbage-collect를 돌린다.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry
+  namespace: ci
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: ci
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:2.8.3
+          ports:
+            - containerPort: 5000
+              hostPort: 5000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: ci
+spec:
+  selector:
+    app: registry
+  ports:
+    - port: 5000
+      targetPort: 5000
+---
+# Jenkins 컨트롤러: ci 네임스페이스에 빌드 Pod를 띄우고 지울 수 있다.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins
+  namespace: apps
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-agents
+  namespace: ci
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create, get]
+  - apiGroups: [""]
+    resources: [pods/log, events]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-agents
+  namespace: ci
+subjects:
+  - kind: ServiceAccount
+    name: jenkins
+    namespace: apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jenkins-agents
+---
+# 빌드 Pod: 포럼 Deployment 두 개의 이미지만 바꿀 수 있다.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forum-deployer
+  namespace: ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: forum-deployer
+  namespace: apps
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [forum-backend, forum-frontend]
+    verbs: [get, list, watch, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: forum-deployer
+  namespace: apps
+subjects:
+  - kind: ServiceAccount
+    name: forum-deployer
+    namespace: ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: forum-deployer

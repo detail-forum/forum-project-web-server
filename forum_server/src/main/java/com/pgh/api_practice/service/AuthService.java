@@ -25,7 +25,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -323,6 +328,53 @@ public class AuthService {
 
         // 이메일 재발송
         emailService.sendVerificationEmail(user.getEmail(), user.getUsername(), verificationToken);
+    }
+
+    /** ✅ 비밀번호 재설정 메일 발송. 가입 여부를 드러내지 않도록 없는 이메일도 조용히 끝낸다. */
+    // shortcut: 요청 횟수 제한 없음, 같은 주소로 반복 요청이 들어오면 IP/이메일별 제한을 추가한다.
+    @Transactional
+    public void requestPasswordReset(String email) {
+        Users user = authRepository.findByEmail(email).orElse(null);
+        if (user == null || user.isDeleted()) {
+            return;
+        }
+
+        String token = UUID.randomUUID().toString();
+        user.setPasswordResetTokenHash(sha256(token));
+        user.setPasswordResetExpiresAt(LocalDateTime.now().plus(PASSWORD_RESET_TTL));
+        authRepository.save(user);
+
+        emailService.sendPasswordResetEmail(user.getEmail(), user.getUsername(), token);
+    }
+
+    /** ✅ 메일 링크의 토큰으로 비밀번호 재설정 */
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        Users user = authRepository.findByPasswordResetTokenHash(sha256(token))
+                .filter(u -> !u.isDeleted())
+                .filter(u -> u.getPasswordResetExpiresAt() != null
+                        && u.getPasswordResetExpiresAt().isAfter(LocalDateTime.now()))
+                .orElseThrow(() -> new IllegalArgumentException("유효하지 않거나 만료된 링크입니다. 다시 요청해주세요."));
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPasswordResetTokenHash(null);
+        user.setPasswordResetExpiresAt(null);
+        // 메일 링크를 열었다는 것은 이메일 소유가 확인된 것이다.
+        user.setEmailVerified(true);
+        user.setEmailVerificationToken(null);
+        authRepository.save(user);
+        refreshTokenRepository.deleteByUserId(user.getId());
+    }
+
+    private static final Duration PASSWORD_RESET_TTL = Duration.ofMinutes(30);
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
 }

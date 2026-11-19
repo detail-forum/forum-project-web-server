@@ -53,6 +53,15 @@
         @Column(name = "email_verification_token", length = 255)
         private String emailVerificationToken;
 
+        // 원문 토큰은 메일로만 나가고, DB에는 SHA-256 해시만 둔다.
+        @JsonIgnore
+        @Column(name = "password_reset_token_hash", length = 64)
+        private String passwordResetTokenHash;
+
+        @JsonIgnore
+        @Column(name = "password_reset_expires_at")
+        private LocalDateTime passwordResetExpiresAt;
+
         @CreatedDate
         @Column(name = "created_datetime", nullable = false, updatable = false)
         private LocalDateTime createdDate;

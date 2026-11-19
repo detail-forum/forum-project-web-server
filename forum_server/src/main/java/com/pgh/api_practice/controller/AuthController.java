@@ -3,6 +3,7 @@ package com.pgh.api_practice.controller;
 import com.pgh.api_practice.dto.ChangePasswordDTO;
 import com.pgh.api_practice.dto.LoginRequestDTO;
 import com.pgh.api_practice.dto.UpdateProfileDTO;
+import com.pgh.api_practice.dto.auth.PasswordResetDTO;
 import com.pgh.api_practice.dto.auth.RegisterRequestDTO;
 import com.pgh.api_practice.dto.auth.LoginResponseDTO;
 import com.pgh.api_practice.dto.auth.RefreshTokenRequestDTO;
@@ -211,6 +212,20 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resendVerificationEmail(@RequestParam String email) {
         authService.resendVerificationEmail(email);
         return ResponseEntity.ok(ApiResponse.ok("인증 메일이 재발송되었습니다."));
+    }
+
+    /** ✅ 비밀번호 재설정 메일 요청. 가입 여부와 관계없이 같은 응답을 준다. */
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<ApiResponse<Void>> requestPasswordReset(@Valid @RequestBody PasswordResetDTO.Request dto) {
+        authService.requestPasswordReset(dto.email());
+        return ResponseEntity.ok(ApiResponse.ok("가입된 이메일이라면 비밀번호 재설정 메일이 발송되었습니다."));
+    }
+
+    /** ✅ 비밀번호 재설정 */
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody PasswordResetDTO.Confirm dto) {
+        authService.resetPassword(dto.token(), dto.newPassword());
+        return ResponseEntity.ok(ApiResponse.ok("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요."));
     }
 }
 

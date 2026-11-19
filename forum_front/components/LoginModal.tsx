@@ -307,6 +307,11 @@ export default function LoginModal({ isOpen = true, onClose, onLoginSuccess }: L
             >
               {isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
             </button>
+            {isLogin && (
+              <a href="/reset-password" className="block mt-2 text-sm text-gray-500 hover:underline">
+                아이디·비밀번호를 잊으셨나요?
+              </a>
+            )}
           </div>
         </div>
       </div>

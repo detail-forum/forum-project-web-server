@@ -24,6 +24,7 @@ public interface AuthRepository extends JpaRepository<Users, Long> {
     
     Optional<Users> findByEmail(String email);
     Optional<Users> findByEmailVerificationToken(String token);
+    Optional<Users> findByPasswordResetTokenHash(String tokenHash);
     
     /** 사용자 검색 (username 또는 nickname으로 검색) - 강화된 검색 */
     @Query("SELECT u FROM Users u WHERE " +

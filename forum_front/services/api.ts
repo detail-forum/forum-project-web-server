@@ -297,6 +297,12 @@ export const authApi = {
     return response.data
   },
 
+  requestPasswordReset: (email: string) =>
+    apiClient.post<ApiResponse<void>>('/auth/password-reset/request', { email }).then(r => r.data),
+
+  resetPassword: (token: string, newPassword: string) =>
+    apiClient.post<ApiResponse<void>>('/auth/password-reset/confirm', { token, newPassword }).then(r => r.data),
+
   refreshToken: (data: RefreshTokenRequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/auth/refresh', data).then(r => r.data),
   

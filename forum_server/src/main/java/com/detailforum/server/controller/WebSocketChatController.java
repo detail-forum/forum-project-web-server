@@ -145,8 +145,8 @@ public class WebSocketChatController {
             @Payload DirectChatMessageRequest request,
             Principal principal
     ) {
+        // 프론트는 {message}만 보낸다. type 검사를 두면 모든 메시지가 조용히 버려진다.
         if (principal == null) return;
-        if (!"MESSAGE".equals(request.getType())) return;
 
         directChatService.sendMessageViaWebSocket(
                 roomId,
@@ -225,8 +225,9 @@ public class WebSocketChatController {
                         .readCount(readCount)
                         .build();
 
+        // 메시지 토픽으로 보내면 프론트가 읽음 이벤트를 메시지로 그려 화면이 깨진다.
         messagingTemplate.convertAndSend(
-                "/topic/direct/" + roomId,
+                "/topic/direct/" + roomId + "/read",
                 response
         );
     }

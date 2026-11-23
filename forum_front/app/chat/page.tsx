@@ -120,7 +120,7 @@ export default function ChatPage() {
       // 읽음 상태 업데이트
       setDirectMessages(prev => prev.map(msg => 
         msg.id === data.messageId 
-          ? { ...msg, isRead: data.isRead }
+          ? { ...msg, isRead: data.isRead ?? true } // 서버 읽음 이벤트에는 isRead가 없다: 오면 읽은 것
           : msg
       ))
     }, []),

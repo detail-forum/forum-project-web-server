@@ -225,8 +225,9 @@ public class WebSocketChatController {
                         .readCount(readCount)
                         .build();
 
+        // 메시지 토픽으로 보내면 프론트가 읽음 이벤트를 메시지로 그려 화면이 깨진다.
         messagingTemplate.convertAndSend(
-                "/topic/direct/" + roomId,
+                "/topic/direct/" + roomId + "/read",
                 response
         );
     }

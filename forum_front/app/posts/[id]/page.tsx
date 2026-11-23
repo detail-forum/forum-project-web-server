@@ -624,7 +624,7 @@ export default function PostDetailPage() {
           ) : post ? (
             <>
               <article className="bg-white">
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-4">
                   {post.title}
                   {post.groupName && (
                     <span className="ml-3 text-lg font-normal">
@@ -693,7 +693,7 @@ export default function PostDetailPage() {
                   </div>
                 </div>
                 <div className="prose max-w-none">
-                  <div className="text-gray-800 leading-relaxed">
+                  <div className="text-[17px] text-gray-800 leading-8">
                     {renderMarkdown(post.body)}
                   </div>
                 </div>

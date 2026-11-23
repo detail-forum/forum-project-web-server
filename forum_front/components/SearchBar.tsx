@@ -170,7 +170,7 @@ export default function SearchBar() {
             }
           }}
           placeholder="게시물, 사용자, 모임 검색..."
-          className="w-full px-6 py-4 pl-12 pr-32 text-lg border-2 border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+          className="w-full px-6 py-4 pl-12 pr-32 text-lg bg-white border border-gray-200 rounded-full shadow-lg shadow-gray-900/5 focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
         />
         <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
           <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

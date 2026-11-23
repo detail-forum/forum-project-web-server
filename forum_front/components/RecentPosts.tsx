@@ -66,17 +66,18 @@ export default function RecentPosts() {
   return (
     <section className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <ScrollReveal>
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">최신 게시글</h2>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900 mb-1">최신 게시글</h2>
             <p className="text-gray-600">최근에 작성된 게시글을 확인해보세요</p>
           </div>
           <Link
             href="/posts-list"
             prefetch={true}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+            className="group inline-flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary transition-colors"
           >
             전체 게시글 보기
+            <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">→</span>
           </Link>
         </div>
       </ScrollReveal>

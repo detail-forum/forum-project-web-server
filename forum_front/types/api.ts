@@ -123,6 +123,56 @@ export interface User {
   githubLink?: string
   isDeleted: boolean
   createdDate: string
+  role?: 'USER' | 'ADMIN'
+  suspended?: boolean
+}
+
+// ===== 관리자 화면 (/admin) =====
+export interface PageOf<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
+}
+
+export interface AdminStats {
+  users: number
+  suspendedUsers: number
+  posts: number
+  groupPosts: number
+  comments: number
+  groups: number
+}
+
+export interface AdminUser {
+  id: number
+  username: string
+  nickname: string
+  email: string
+  role: 'USER' | 'ADMIN'
+  suspended: boolean
+  emailVerified: boolean
+  createdDate: string
+}
+
+export interface AdminPost {
+  id: number
+  groupPost: boolean
+  groupId: number | null
+  title: string
+  username: string
+  views: number
+  createdTime: string
+}
+
+export interface AdminComment {
+  id: number
+  body: string
+  username: string
+  postId: number | null
+  groupPostId: number | null
+  groupId: number | null
+  createdTime: string
 }
 
 export interface UpdateProfile {

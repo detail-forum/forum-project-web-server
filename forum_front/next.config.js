@@ -31,10 +31,11 @@ const nextConfig = {
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
+      // Pretendard 웹폰트(app/layout.tsx)를 jsDelivr에서 받는다.
+      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
       "img-src 'self' data: blob: https://*.giphy.com",
       "connect-src 'self' https://api.giphy.com https://forum.rjsgud.com wss://forum.rjsgud.com",
-      "font-src 'self' data:",
+      "font-src 'self' data: https://cdn.jsdelivr.net",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

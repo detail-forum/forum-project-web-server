@@ -111,7 +111,7 @@ export default function GroupPostDetailPage() {
 
     try {
       setLiking(true)
-      const response = await postApi.toggleLike(postId)
+      const response = await postApi.toggleLike(postId, isGroupPost)
       if (response.success) {
         // 좋아요 상태 업데이트
         const newIsLiked = response.data || false

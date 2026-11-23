@@ -6,12 +6,13 @@ import Image from 'next/image'
 import { useSelector, useDispatch } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { logout } from '@/store/slices/authSlice'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { getUsernameFromToken } from '@/utils/jwt'
 import { authApi, notificationApi } from '@/services/api'
 import { store } from '@/store/store'
 import type { User } from '@/types/api'
 import NotificationModal from './NotificationModal'
+import ThemeToggle from './ThemeToggle'
 
 interface HeaderProps {
   onLoginClick: () => void
@@ -29,6 +30,12 @@ export default function Header({ onLoginClick }: HeaderProps) {
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
   const dispatch = useDispatch()
   const router = useRouter()
+  const pathname = usePathname()
+  // 현재 위치한 메뉴를 표시한다.
+  const navClass = (href: string) =>
+    `text-sm font-medium transition-colors hover:text-primary ${
+      pathname === href || pathname?.startsWith(href + '/') ? 'text-primary' : 'text-gray-600'
+    }`
 
   const fetchUserInfo = useCallback(async (retryCount = 0) => {
     // 인증되지 않은 상태에서는 API 호출하지 않음 (무한 루프 방지)
@@ -148,8 +155,9 @@ export default function Header({ onLoginClick }: HeaderProps) {
   }, [dispatch, router])
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
-      <div className="max-w-screen-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <>
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200/80">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center space-x-3" prefetch={true}>
             <img
@@ -159,15 +167,15 @@ export default function Header({ onLoginClick }: HeaderProps) {
               height={40}
               className="object-contain"
             />
-            <span className="text-lg font-semibold text-gray-800">
+            <span className="text-lg font-bold tracking-tight text-gray-900">
               rjsgud's forum
             </span>
           </Link>
           
-          <nav className="flex items-center space-x-4">
+          <nav className="flex items-center gap-5">
             <Link
               href="/posts-list"
-              className="text-gray-700 hover:text-primary transition-colors"
+              className={navClass("/posts-list")}
               prefetch={true}
             >
               게시글
@@ -176,28 +184,28 @@ export default function Header({ onLoginClick }: HeaderProps) {
                   <>
                 <Link
                   href="/my-posts"
-                  className="text-gray-700 hover:text-primary transition-colors"
+                  className={navClass("/my-posts")}
                   prefetch={true}
                 >
                   내 게시글
                 </Link>
                 <Link
                   href="/social-gathering"
-                  className="text-gray-700 hover:text-primary transition-colors"
+                  className={navClass("/social-gathering")}
                   prefetch={true}
                 >
                   모임
                 </Link>
                 <Link
                   href="/chat"
-                  className="text-gray-700 hover:text-primary transition-colors"
+                  className={navClass("/chat")}
                   prefetch={true}
                 >
                   채팅
                 </Link>
                 <button
                   onClick={() => setShowNotificationModal(true)}
-                  className="relative text-gray-700 hover:text-primary transition-colors"
+                  className="relative p-1.5 rounded-full text-gray-600 hover:text-primary hover:bg-gray-100 transition-colors"
                 >
                   <span className="sr-only">알림</span>
                   <svg
@@ -215,7 +223,7 @@ export default function Header({ onLoginClick }: HeaderProps) {
                     />
                   </svg>
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center ring-2 ring-white">
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
@@ -228,12 +236,13 @@ export default function Header({ onLoginClick }: HeaderProps) {
                       e.preventDefault()
                       onLoginClick()
                     }}
-                    className="text-gray-700 hover:text-primary transition-colors"
+                    className={navClass('/my-posts')}
                   >
                     내 게시글
                   </button>
                   </>
                 )}
+            <ThemeToggle />
             {mounted && isAuthenticated ? (
               <div className="relative" ref={dropdownRef}>
                 <button
@@ -274,27 +283,36 @@ export default function Header({ onLoginClick }: HeaderProps) {
                 </button>
                 
                 {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-200 p-1 z-50">
                     <Link
                       href="/settings"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block px-3 py-2 text-sm rounded-lg text-gray-700 hover:bg-gray-100"
                       onClick={() => setShowDropdown(false)}
                     >
                       설정
                     </Link>
                      <Link
                       href="/social"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block px-3 py-2 text-sm rounded-lg text-gray-700 hover:bg-gray-100"
                       prefetch={true}
                     >
                       소셜
                     </Link>
+                    {user?.role === 'ADMIN' && (
+                      <Link
+                        href="/admin"
+                        className="block px-3 py-2 text-sm rounded-lg text-gray-700 hover:bg-gray-100"
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        서비스 관리
+                      </Link>
+                    )}
                     <button
                       onClick={() => {
                         setShowDropdown(false)
                         handleLogout()
                       }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block w-full text-left px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50"
                     >
                       로그아웃
                     </button>
@@ -304,7 +322,7 @@ export default function Header({ onLoginClick }: HeaderProps) {
             ) : (
               <button
                 onClick={onLoginClick}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
+                className="px-4 py-2 text-sm font-semibold bg-primary text-white rounded-lg hover:bg-secondary transition-colors"
               >
                 로그인
               </button>
@@ -312,6 +330,8 @@ export default function Header({ onLoginClick }: HeaderProps) {
           </nav>
         </div>
       </div>
+    </header>
+      {/* 헤더 밖에 둔다. 헤더의 backdrop-blur가 fixed 요소의 기준을 헤더로 바꿔 모달이 헤더 안에 갇힌다. */}
       {showNotificationModal && (
         <NotificationModal
           isOpen={showNotificationModal}
@@ -321,7 +341,7 @@ export default function Header({ onLoginClick }: HeaderProps) {
           }}
         />
       )}
-    </header>
+    </>
   )
 }
 

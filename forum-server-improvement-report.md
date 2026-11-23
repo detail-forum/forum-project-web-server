@@ -15,7 +15,7 @@ API 경로, 성공 응답 필드, 로그인 응답(`accessToken`, `refreshToken`
 | 프론트 | `forum_front`. Next.js 14, TypeScript, Redux, Axios. 이 작업의 대상은 서버 계약이다 |
 | 실행 | 서버 `forum_server`에서 `./gradlew bootRun` (포트 8081). 프론트 `npm run dev` (포트 3000) |
 | 배포 | Jenkins가 프론트를 빌드하고 `gradlew.bat clean build`로 JAR을 만들어 NSSM 서비스로 띄운다. Nginx가 `https://forum.rjsgud.com`에서 `/api`를 백엔드로 넘긴다 |
-| 테스트 | 시작 시점에는 `ApiPracticeApplicationTests.contextLoads`만 있었고, 로컬 MySQL이 없으면 실패했다. Jenkins는 `-x test`로 테스트를 빼 두고 있었다 |
+| 테스트 | 시작 시점에는 `ForumServerApplicationTests.contextLoads`만 있었고, 로컬 MySQL이 없으면 실패했다. Jenkins는 `-x test`로 테스트를 빼 두고 있었다 |
 
 인증은 필터가 토큰을 넣기만 하고, `SecurityFilterChain`은 모든 요청을 `permitAll`한다. 쓰기 API는 서비스에서 `SecurityContext`를 직접 본다. 공개 글 조회는 비로그인으로 동작해야 해서, 이 구조 자체를 한 번에 잠그지는 않았다.
 

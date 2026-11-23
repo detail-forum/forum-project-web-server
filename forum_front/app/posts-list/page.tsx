@@ -227,7 +227,7 @@ function PostsListContent() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="제목 또는 본문에서 검색..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
               />
               <button
                 type="submit"
@@ -248,7 +248,7 @@ function PostsListContent() {
           </form>
 
           {/* 필터 - 오른쪽 배치 */}
-          <div className="flex items-center space-x-4 flex-wrap gap-4">
+          <div className="flex items-center flex-wrap gap-x-6 gap-y-3">
             {isAuthenticated && (
               <div className="flex items-center space-x-2">
                 <button
@@ -278,72 +278,76 @@ function PostsListContent() {
                 </button>
               </div>
             )}
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-700">정렬:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">정렬</span>
+              <div className="inline-flex p-1 bg-gray-100 rounded-lg">
               <button
                 onClick={() => handleSortChange('RESENT')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   sortType === 'RESENT'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-white text-gray-900 font-semibold shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 최신순
               </button>
               <button
                 onClick={() => handleSortChange('HITS')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   sortType === 'HITS'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-white text-gray-900 font-semibold shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 조회수순
               </button>
               <button
                 onClick={() => handleSortChange('LIKES')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   sortType === 'LIKES'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-white text-gray-900 font-semibold shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 좋아요순
               </button>
+              </div>
             </div>
             
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-700">유형:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">유형</span>
+              <div className="inline-flex p-1 bg-gray-100 rounded-lg">
               <button
                 onClick={() => handleGroupFilterChange('ALL')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   groupFilter === 'ALL'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-white text-gray-900 font-semibold shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 전체
               </button>
               <button
                 onClick={() => handleGroupFilterChange('GENERAL')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   groupFilter === 'GENERAL'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-white text-gray-900 font-semibold shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 일반 게시글
               </button>
               <button
                 onClick={() => handleGroupFilterChange('GROUP')}
-                className={`px-4 py-2 rounded-lg transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
                   groupFilter === 'GROUP'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-white text-gray-900 font-semibold shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 모임 게시글
               </button>
+              </div>
             </div>
           </div>
         </div>

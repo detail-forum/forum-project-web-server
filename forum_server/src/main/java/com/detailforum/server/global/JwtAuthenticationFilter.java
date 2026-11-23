@@ -1,0 +1,95 @@
+package com.detailforum.server.global;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import com.detailforum.server.repository.RefreshTokenRepository;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Slf4j
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final TokenProvider tokenProvider;          // validateToken, getUsername 제공
+    private final UserDetailsService userDetailsService;
+    private final RefreshTokenRepository refreshTokenRepository;
+
+    @Override
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
+
+        try {
+            // 1) Authorization 헤더에서 Bearer 토큰 추출
+            String token = resolveToken(request);
+
+            // 2) 토큰 존재 + 유효성 검증. 리프레시 토큰은 API 인증에 쓰지 않는다.
+            if (StringUtils.hasText(token) && tokenProvider.validateToken(token) && !isRefreshCredential(token)) {
+
+                // 3) 토큰에서 username 뽑아 UserDetails 로드
+                String username = tokenProvider.getUsername(token);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                // 4) SecurityContext에 Authentication 주입 (이미 있으면 덮어쓰지 않음)
+                // 정지된 계정(isEnabled=false)은 이미 받은 액세스 토큰으로도 인증되지 않는다.
+                if (userDetails.isEnabled() && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            }
+        } catch (Exception e) {
+            // 토큰 검증 실패 시 로그만 남기고 계속 진행 (인증이 선택적일 수 있음)
+            // SecurityContext는 null로 유지되어 anonymousUser로 처리됨
+            log.debug("JWT 인증 실패 (선택적 인증): {}", e.getMessage());
+        }
+
+        // 5) 다음 필터로 진행
+        filterChain.doFilter(request, response);
+    }
+
+    private String resolveToken(HttpServletRequest request) {
+        // 1) Authorization 헤더에서 토큰 추출 (우선순위)
+        String header = request.getHeader("Authorization");
+        if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
+            return header.substring(7).trim();
+        }
+        
+        // 2) 쿠키에서 토큰 추출 (Authorization 헤더가 없을 경우)
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
+                if ("accessToken".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    private boolean isRefreshCredential(String token) {
+        if (tokenProvider.isRefreshToken(token)) {
+            return true;
+        }
+        // typ이 없는 예전 리프레시 토큰은 DB에 저장된 값으로만 구분한다.
+        return tokenProvider.getTokenType(token) == null
+                && refreshTokenRepository.findByRefreshToken(token).isPresent();
+    }
+}

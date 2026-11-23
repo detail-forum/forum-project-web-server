@@ -13,6 +13,11 @@ import type {
   CreateCommentDTO,
   UpdateCommentDTO,
   NotificationDTO,
+  AdminStats,
+  AdminUser,
+  AdminPost,
+  AdminComment,
+  PageOf,
 } from '@/types/api'
 import { cache } from '@/utils/cache'
 import { store } from '@/store/store'
@@ -402,8 +407,11 @@ export const postApi = {
     return response.data
   },
 
-  toggleLike: async (id: number): Promise<ApiResponse<boolean>> => {
-    const response = await apiClient.post<ApiResponse<boolean>>(`/post/${id}/like`)
+  // 모임 게시글(group_posts)은 posts와 id가 겹칠 수 있어 groupPost=true로 구분한다.
+  toggleLike: async (id: number, groupPost = false): Promise<ApiResponse<boolean>> => {
+    const response = await apiClient.post<ApiResponse<boolean>>(`/post/${id}/like`, null, {
+      params: groupPost ? { groupPost: true } : undefined,
+    })
     // 좋아요 후 목록 캐시 무효화
     cache.clear()
     return response.data
@@ -809,4 +817,34 @@ export const notificationApi = {
     const response = await apiClient.get<ApiResponse<boolean>>(`/notification/${notificationId}/read-status`)
     return response.data
   },
+}
+
+// 관리자 전용. 서버가 /admin/** 를 ROLE_ADMIN에게만 연다.
+export const adminApi = {
+  getStats: async (): Promise<ApiResponse<AdminStats>> =>
+    (await apiClient.get<ApiResponse<AdminStats>>('/admin/stats')).data,
+
+  getUsers: async (keyword = '', page = 0, size = 20): Promise<ApiResponse<PageOf<AdminUser>>> =>
+    (await apiClient.get<ApiResponse<PageOf<AdminUser>>>('/admin/users', { params: { keyword, page, size } })).data,
+
+  setSuspended: async (userId: number, suspended: boolean): Promise<ApiResponse<void>> =>
+    (await apiClient.patch<ApiResponse<void>>(`/admin/users/${userId}/suspension`, { suspended })).data,
+
+  getPosts: async (keyword = '', groupPost = false, page = 0, size = 20): Promise<ApiResponse<PageOf<AdminPost>>> =>
+    (await apiClient.get<ApiResponse<PageOf<AdminPost>>>('/admin/posts', { params: { keyword, groupPost, page, size } })).data,
+
+  deletePost: async (id: number, groupPost: boolean): Promise<ApiResponse<void>> => {
+    const response = await apiClient.delete<ApiResponse<void>>(`/admin/posts/${id}`, { params: { groupPost } })
+    cache.clear()
+    return response.data
+  },
+
+  getComments: async (keyword = '', page = 0, size = 20): Promise<ApiResponse<PageOf<AdminComment>>> =>
+    (await apiClient.get<ApiResponse<PageOf<AdminComment>>>('/admin/comments', { params: { keyword, page, size } })).data,
+
+  deleteComment: async (id: number): Promise<ApiResponse<void>> =>
+    (await apiClient.delete<ApiResponse<void>>(`/admin/comments/${id}`)).data,
+
+  sendNotice: async (title: string, message: string): Promise<ApiResponse<number>> =>
+    (await apiClient.post<ApiResponse<number>>('/admin/notices', { title, message })).data,
 }

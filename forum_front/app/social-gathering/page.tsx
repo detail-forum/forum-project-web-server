@@ -73,7 +73,7 @@ export default function SocialGatheringPage() {
     <div className="min-h-screen bg-white">
       <Header onLoginClick={() => {}} />
       {/* 배너 영역 - AnimatedBackground와 RotatingText 사용 */}
-      <section className="relative overflow-hidden py-20 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      <section className="relative overflow-hidden py-20 bg-gradient-to-br from-primary/10 via-white to-secondary/10">
         <AnimatedBackground variant="particles" className="opacity-30" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center">

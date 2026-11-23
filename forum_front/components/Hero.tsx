@@ -70,7 +70,7 @@ export default function Hero() {
       {/* 배경 애니메이션 효과 */}
       <div className="absolute inset-0 opacity-20">
         <motion.div
-          className="absolute top-0 left-1/4 w-72 h-72 bg-primary rounded-full mix-blend-multiply filter blur-xl"
+          className="absolute top-0 left-1/4 w-72 h-72 bg-primary rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-xl"
           animate={{
             scale: [1, 1.2, 1],
             opacity: [0.2, 0.3, 0.2],
@@ -82,7 +82,7 @@ export default function Hero() {
           }}
         />
         <motion.div
-          className="absolute top-0 right-1/4 w-72 h-72 bg-secondary rounded-full mix-blend-multiply filter blur-xl"
+          className="absolute top-0 right-1/4 w-72 h-72 bg-secondary rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-xl"
           animate={{
             scale: [1, 1.2, 1],
             opacity: [0.2, 0.3, 0.2],
@@ -95,7 +95,7 @@ export default function Hero() {
           }}
         />
         <motion.div
-          className="absolute -bottom-8 left-1/2 w-72 h-72 bg-primary rounded-full mix-blend-multiply filter blur-xl"
+          className="absolute -bottom-8 left-1/2 w-72 h-72 bg-primary rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-xl"
           animate={{
             scale: [1, 1.2, 1],
             opacity: [0.2, 0.3, 0.2],
@@ -108,10 +108,12 @@ export default function Hero() {
           }}
         />
       </div>
+      {/* 아래쪽을 페이지 배경으로 자연스럽게 잇는다 */}
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-white pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6">
             <SplitText text="개발자들을 위한" delay={0.1} />
             <br />
             <span className="text-primary">

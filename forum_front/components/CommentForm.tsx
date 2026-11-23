@@ -50,14 +50,14 @@ export default function CommentForm({
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 
-        (err.response?.status === 403 ? '로그인이 필요합니다. 다시 로그인해주세요.' : 
+        ([401, 403].includes(err.response?.status) ? '로그인이 필요합니다. 다시 로그인해주세요.' : 
          err.response?.status === 502 ? '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.' :
          '댓글 작성에 실패했습니다.')
       alert(errorMessage)
       console.error('댓글 작성 실패:', err)
       
       // 403 오류 시 로그아웃 처리
-      if (err.response?.status === 403 && typeof window !== 'undefined') {
+      if ([401, 403].includes(err.response?.status) && typeof window !== 'undefined') {
         store.dispatch(logout())
         setTimeout(() => {
           window.location.href = '/'

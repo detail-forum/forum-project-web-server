@@ -46,7 +46,7 @@ class AdminControllerTest {
 
     @Test
     void onlyAdminsCanOpenAdminApi() throws Exception {
-        mvc.perform(get("/admin/stats")).andExpect(status().isForbidden());
+        mvc.perform(get("/admin/stats")).andExpect(status().isUnauthorized());
         mvc.perform(get("/admin/stats").header("Authorization", bearer(member))).andExpect(status().isForbidden());
         mvc.perform(get("/admin/stats").header("Authorization", bearer(admin)))
                 .andExpect(status().isOk())

@@ -50,7 +50,7 @@ class ReportControllerTest {
 
     @Test
     void reportNeedsLoginAndIsOncePerUser() throws Exception {
-        report(null, post.getId()).andExpect(status().isForbidden());
+        report(null, post.getId()).andExpect(status().isUnauthorized());
         report(alice, post.getId()).andExpect(status().isOk());
         report(alice, post.getId()).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("이미 신고했습니다."));

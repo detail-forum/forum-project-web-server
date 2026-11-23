@@ -5,7 +5,7 @@ import com.detailforum.server.global.TokenProvider;
 import com.detailforum.server.repository.DirectChatRoomRepository;
 import com.detailforum.server.repository.RefreshTokenRepository;
 import com.detailforum.server.repository.UserRepository;
-import com.detailforum.server.service.GroupService;
+import com.detailforum.server.service.GroupChatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,14 +32,14 @@ class WebSocketAuthInterceptorTest {
     @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private UserRepository userRepository;
     @Mock private DirectChatRoomRepository directChatRoomRepository;
-    @Mock private GroupService groupService;
+    @Mock private GroupChatService groupChatService;
 
     private WebSocketAuthInterceptor interceptor;
 
     @BeforeEach
     void setUp() {
         interceptor = new WebSocketAuthInterceptor(tokenProvider, refreshTokenRepository,
-                userRepository, directChatRoomRepository, groupService);
+                userRepository, directChatRoomRepository, groupChatService);
     }
 
     @Test
@@ -64,7 +64,7 @@ class WebSocketAuthInterceptorTest {
 
     @Test
     void groupSendIsCheckedAgainstTheRoomAndGroup() {
-        when(groupService.canUseChatRoom(2L, 9L, "me")).thenReturn(false);
+        when(groupChatService.canUseChatRoom(2L, 9L, "me")).thenReturn(false);
 
         assertThatThrownBy(() -> interceptor.preSend(frame(StompCommand.SEND, "/app/chat/2/9/typing/start", "me"), null))
                 .isInstanceOf(AccessDeniedException.class);

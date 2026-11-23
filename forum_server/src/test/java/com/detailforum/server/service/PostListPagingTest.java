@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PostListPagingTest {
 
     @Autowired
-    private PostService postService;
+    private PostQueryService postService;
     @Autowired
     private PostRepository postRepository;
     @Autowired

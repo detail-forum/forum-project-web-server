@@ -1,6 +1,7 @@
 package com.detailforum.server.controller;
 
 import com.detailforum.server.dto.*;
+import com.detailforum.server.service.GroupChatService;
 import com.detailforum.server.service.GroupService;
 import com.detailforum.server.service.GroupPostService;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import java.util.List;
 public class GroupController {
 
     private final GroupService groupService;
+    private final GroupChatService groupChatService;
     private final GroupPostService groupPostService;
 
     /** 모임 생성 */
@@ -120,7 +122,7 @@ public class GroupController {
     /** 채팅방 목록 조회 */
     @GetMapping("/{groupId}/chat-rooms")
     public ResponseEntity<ApiResponse<List<GroupChatRoomDTO>>> getChatRooms(@PathVariable Long groupId) {
-        List<GroupChatRoomDTO> rooms = groupService.getChatRooms(groupId);
+        List<GroupChatRoomDTO> rooms = groupChatService.getChatRooms(groupId);
         return ResponseEntity.ok(ApiResponse.ok(rooms, "채팅방 목록 조회 성공"));
     }
 
@@ -129,7 +131,7 @@ public class GroupController {
     public ResponseEntity<ApiResponse<Long>> createChatRoom(
             @PathVariable Long groupId,
             @Valid @RequestBody CreateGroupChatRoomDTO dto) {
-        Long roomId = groupService.createChatRoom(groupId, dto);
+        Long roomId = groupChatService.createChatRoom(groupId, dto);
         return ResponseEntity.ok(ApiResponse.ok(roomId, "채팅방이 생성되었습니다."));
     }
 
@@ -139,7 +141,7 @@ public class GroupController {
             @PathVariable Long groupId,
             @PathVariable Long roomId,
             @Valid @RequestBody UpdateGroupChatRoomDTO dto) {
-        groupService.updateChatRoom(groupId, roomId, dto);
+        groupChatService.updateChatRoom(groupId, roomId, dto);
         return ResponseEntity.ok(ApiResponse.ok("채팅방 정보가 수정되었습니다."));
     }
 
@@ -148,7 +150,7 @@ public class GroupController {
     public ResponseEntity<ApiResponse<Void>> deleteChatRoom(
             @PathVariable Long groupId,
             @PathVariable Long roomId) {
-        groupService.deleteChatRoom(groupId, roomId);
+        groupChatService.deleteChatRoom(groupId, roomId);
         return ResponseEntity.ok(ApiResponse.ok("채팅방이 삭제되었습니다."));
     }
 
@@ -204,7 +206,7 @@ public class GroupController {
             @PathVariable Long groupId,
             @PathVariable Long roomId,
             @Valid @RequestBody CreateGroupChatMessageDTO dto) {
-        Long messageId = groupService.sendChatMessage(groupId, roomId, dto);
+        Long messageId = groupChatService.sendChatMessage(groupId, roomId, dto);
         return ResponseEntity.ok(ApiResponse.ok(messageId, "메시지가 전송되었습니다."));
     }
 
@@ -215,7 +217,7 @@ public class GroupController {
             @PathVariable Long roomId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        List<GroupChatMessageDTO> messages = groupService.getChatMessages(groupId, roomId, page, size);
+        List<GroupChatMessageDTO> messages = groupChatService.getChatMessages(groupId, roomId, page, size);
         return ResponseEntity.ok(ApiResponse.ok(messages, "채팅 메시지 목록 조회 성공"));
     }
 
@@ -225,7 +227,7 @@ public class GroupController {
             @PathVariable Long groupId,
             @PathVariable Long roomId,
             @PathVariable Long messageId) {
-        groupService.deleteChatMessage(groupId, roomId, messageId);
+        groupChatService.deleteChatMessage(groupId, roomId, messageId);
         return ResponseEntity.ok(ApiResponse.ok("메시지가 삭제되었습니다."));
     }
 
@@ -236,7 +238,7 @@ public class GroupController {
             @PathVariable Long roomId,
             @PathVariable Long messageId,
             @RequestParam String emoji) {
-        groupService.toggleReaction(groupId, roomId, messageId, emoji);
+        groupChatService.toggleReaction(groupId, roomId, messageId, emoji);
         return ResponseEntity.ok(ApiResponse.ok("반응이 업데이트되었습니다."));
     }
 
@@ -244,7 +246,7 @@ public class GroupController {
     @GetMapping("/chat/group/rooms")
     public ResponseEntity<ApiResponse<List<GroupChatRoomListDTO>>> getMyGroupChatRooms() {
 
-        List<GroupChatRoomListDTO> rooms = groupService.getMyGroupChatRooms();
+        List<GroupChatRoomListDTO> rooms = groupChatService.getMyGroupChatRooms();
 
         return ResponseEntity.ok(
                 ApiResponse.ok(rooms, "그룹 채팅방 목록 조회 성공")

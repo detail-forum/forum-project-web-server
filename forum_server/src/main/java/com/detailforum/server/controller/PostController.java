@@ -1,6 +1,7 @@
 package com.detailforum.server.controller;
 
 import com.detailforum.server.dto.*;
+import com.detailforum.server.service.PostQueryService;
 import com.detailforum.server.service.PostService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.List;
 public class PostController {
 
     private final PostService postService;
+    private final PostQueryService postQueryService;
 
     /** ✅ 내 게시글 목록 조회 */
     // GET http://localhost:8081/post/my-post?sortType=RESENT&tag=react&groupFilter=ALL
@@ -28,9 +30,9 @@ public class PostController {
             @RequestParam(required = false) String groupFilter) {
         Page<PostListDTO> list;
         if (tag != null && !tag.trim().isEmpty()) {
-            list = postService.getMyPostListByTag(pageable, tag.trim().toLowerCase(), sortType, groupFilter);
+            list = postQueryService.getMyPostListByTag(pageable, tag.trim().toLowerCase(), sortType, groupFilter);
         } else {
-            list = postService.getMyPostList(pageable, sortType, groupFilter);
+            list = postQueryService.getMyPostList(pageable, sortType, groupFilter);
         }
         return ResponseEntity.ok(ApiResponse.ok(list, "내 게시글 조회 성공"));
     }
@@ -49,15 +51,15 @@ public class PostController {
 
         // 검색어가 있으면 검색 결과 반환
         if (search != null && !search.trim().isEmpty()) {
-            list = postService.searchPosts(pageable, search.trim(), sortType, groupFilter);
+            list = postQueryService.searchPosts(pageable, search.trim(), sortType, groupFilter);
             return ResponseEntity.ok(ApiResponse.ok(list, "검색 결과 조회 성공"));
         }
 
         // 태그 필터링
         if (tag != null && !tag.trim().isEmpty()) {
-            list = postService.getPostListByTag(pageable, tag.trim().toLowerCase(), sortType, groupFilter);
+            list = postQueryService.getPostListByTag(pageable, tag.trim().toLowerCase(), sortType, groupFilter);
         } else {
-            list = postService.getPostList(pageable, sortType, groupFilter);
+            list = postQueryService.getPostList(pageable, sortType, groupFilter);
         }
         return ResponseEntity.ok(ApiResponse.ok(list, "전체 게시글 조회 성공"));
     }
@@ -109,7 +111,7 @@ public class PostController {
     // GET http://localhost:8081/post/my-tags
     @GetMapping("/my-tags")
     public ResponseEntity<ApiResponse<List<String>>> getMyTags() {
-        List<String> tags = postService.getMyTags();
+        List<String> tags = postQueryService.getMyTags();
         return ResponseEntity.ok(ApiResponse.ok(tags, "내 태그 조회 성공"));
     }
 
@@ -120,7 +122,7 @@ public class PostController {
             @PathVariable String username,
             Pageable pageable,
             @RequestParam(defaultValue = "RESENT") String sortType) {
-        Page<PostListDTO> list = postService.getUserPostList(username, pageable, sortType);
+        Page<PostListDTO> list = postQueryService.getUserPostList(username, pageable, sortType);
         return ResponseEntity.ok(ApiResponse.ok(list, "사용자 게시글 조회 성공"));
     }
 
@@ -128,7 +130,7 @@ public class PostController {
     // GET http://localhost:8081/post/user/{username}/count
     @GetMapping("/user/{username}/count")
     public ResponseEntity<ApiResponse<Long>> getUserPostCount(@PathVariable String username) {
-        long count = postService.getUserPostCount(username);
+        long count = postQueryService.getUserPostCount(username);
         return ResponseEntity.ok(ApiResponse.ok(count, "게시글 수 조회 성공"));
     }
 
@@ -140,7 +142,7 @@ public class PostController {
             Pageable pageable,
             @RequestParam(defaultValue = "RESENT") String sortType,
             @RequestParam(required = false) Boolean isPublic) {
-        Page<PostListDTO> list = postService.getGroupPostList(groupId, pageable, sortType, isPublic);
+        Page<PostListDTO> list = postQueryService.getGroupPostList(groupId, pageable, sortType, isPublic);
         return ResponseEntity.ok(ApiResponse.ok(list, "모임 게시글 조회 성공"));
     }
 }

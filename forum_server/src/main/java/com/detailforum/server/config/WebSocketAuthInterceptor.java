@@ -4,7 +4,7 @@ import com.detailforum.server.global.TokenProvider;
 import com.detailforum.server.repository.DirectChatRoomRepository;
 import com.detailforum.server.repository.RefreshTokenRepository;
 import com.detailforum.server.repository.UserRepository;
-import com.detailforum.server.service.GroupService;
+import com.detailforum.server.service.GroupChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -37,7 +37,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final DirectChatRoomRepository directChatRoomRepository;
-    private final GroupService groupService;
+    private final GroupChatService groupChatService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -107,7 +107,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         }
         Matcher group = GROUP_ROOM.matcher(destination);
         if (group.matches()) {
-            return groupService.canUseChatRoom(Long.valueOf(group.group(1)), Long.valueOf(group.group(2)), username);
+            return groupChatService.canUseChatRoom(Long.valueOf(group.group(1)), Long.valueOf(group.group(2)), username);
         }
         return false;
     }

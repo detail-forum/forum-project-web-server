@@ -1,14 +1,13 @@
 package com.detailforum.server.dto;
 
 import com.detailforum.server.entity.MessageType;
-import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
 public class CreateGroupChatMessageDTO {
-    @Size(min = 1, message = "메시지는 1자 이상이어야 합니다.")
+    // 이미지·파일 메시지는 본문이 비어 있다. 종류별 필수 값은 GroupService.sendChatMessage가 검사한다.
     private String message;
 
 

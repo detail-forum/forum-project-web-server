@@ -27,6 +27,13 @@ const nextConfig = {
   },
   // 보안 응답 헤더 (ZAP 경고 대응). CSP는 앱이 실제 쓰는 출처만 허용.
   // shortcut: script/style에 'unsafe-inline' 허용 — Next.js 인라인 스크립트 때문. nonce 방식으로 좁히려면 미들웨어 필요.
+  // 예전 모임 주소(/social/{id}/...)는 /social-gathering 으로 옮겨졌다. /social 자체는 다른 페이지다.
+  async redirects() {
+    return [
+      { source: '/social/:groupId(\\d+)', destination: '/social-gathering/:groupId', permanent: true },
+      { source: '/social/:groupId(\\d+)/:path*', destination: '/social-gathering/:groupId/:path*', permanent: true },
+    ]
+  },
   async headers() {
     const csp = [
       "default-src 'self'",

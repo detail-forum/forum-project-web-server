@@ -1,968 +1,159 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
-import { format } from 'date-fns'
-import { ko } from 'date-fns/locale'
-import { getUsernameFromToken } from '@/utils/jwt'
-import { directChatApi, groupApi, imageUploadApi, fileUploadApi, followApi } from '@/services/api'
-import type { DirectChatRoomDTO, DirectChatMessageDTO, GroupChatRoomDTO, GroupChatMessageDTO, GroupDetailDTO } from '@/types/api'
-import { useDirectWebSocket } from '@/hooks/useDirectWebSocket'
-import { useWebSocket } from '@/hooks/useWebSocket'
 import GifPicker from '@/components/GifPicker'
+import { getUsernameFromToken } from '@/utils/jwt'
+import { directChatApi, followApi, groupApi } from '@/services/api'
+import type { DirectChatRoomDTO, GroupDetailDTO, GroupMemberDTO } from '@/types/api'
+import { useDirectChatMessages } from '@/hooks/useDirectChatMessages'
+import { useGroupChatMessages } from '@/hooks/useGroupChatMessages'
+import { useMessageActions } from '@/hooks/useMessageActions'
+import InboxRoomList, { type InboxGroupRoom, type InboxTab } from '@/components/chat/InboxRoomList'
+import InboxChatHeader from '@/components/chat/InboxChatHeader'
+import MessageList from '@/components/chat/MessageList'
+import { groupReadLabel } from '@/components/chat/MessageItem'
+import MessageComposer from '@/components/chat/MessageComposer'
+import { MessageOverlays } from '@/components/chat/MessageMenus'
+import ChatSearchSidebar from '@/components/chat/ChatSearchSidebar'
+import MembersSidebar from '@/components/chat/MembersSidebar'
 
-// 확장된 그룹 채팅방 타입 (그룹 정보 포함)
-interface ExtendedGroupChatRoom extends GroupChatRoomDTO {
-  groupId: number
-  groupName: string
-  roomId: number
-  roomName: string
-  roomProfileImageUrl?: string
-  lastMessage?: string
-  lastMessageTime?: string
-  unreadCount: number
-}
+type Sidebar = 'none' | 'search' | 'members'
 
-// 통합 메시지 타입
-type ChatMessage = DirectChatMessageDTO | GroupChatMessageDTO
-
-type ChatTab = 'direct' | 'group'
-
+/** 내 1대1 채팅과 내가 속한 모든 모임의 채팅을 한 화면에서 본다. ?user=아이디 로 1대1을 바로 연다. */
 export default function ChatPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
-  const [currentTab, setCurrentTab] = useState<ChatTab>('direct')
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null)
-  
-  // Direct Chat 관련 상태
-  const [directChatRooms, setDirectChatRooms] = useState<DirectChatRoomDTO[]>([])
-  const [selectedDirectChat, setSelectedDirectChat] = useState<number | null>(null)
-  const [directMessages, setDirectMessages] = useState<DirectChatMessageDTO[]>([])
-  
-  // Group Chat 관련 상태
-  const [groupChatRooms, setGroupChatRooms] = useState<ExtendedGroupChatRoom[]>([])
-  const [selectedGroupChat, setSelectedGroupChat] = useState<{ groupId: number; roomId: number } | null>(null)
-  const [groupMessages, setGroupMessages] = useState<GroupChatMessageDTO[]>([])
-  
-  // 그룹 목록 (채팅방 조회용)
-  const [myGroups, setMyGroups] = useState<Array<{ id: number; name: string }>>([])
-  
-  // 공통 상태
-  const [newMessage, setNewMessage] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false)
-  const [selectedImage, setSelectedImage] = useState<File | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  
-  // 그룹 채팅 전용 상태
+  const currentUsername = useMemo(() => (isAuthenticated ? getUsernameFromToken() : null), [isAuthenticated])
+
+  const [tab, setTab] = useState<InboxTab>('direct')
+  const [directRooms, setDirectRooms] = useState<DirectChatRoomDTO[]>([])
+  const [groupRooms, setGroupRooms] = useState<InboxGroupRoom[]>([])
+  const [selectedDirectId, setSelectedDirectId] = useState<number | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<{ groupId: number; roomId: number } | null>(null)
   const [groupDetail, setGroupDetail] = useState<GroupDetailDTO | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: number; isMyMessage: boolean } | null>(null)
-  const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
-  const [editMessageText, setEditMessageText] = useState('')
-  const [replyingTo, setReplyingTo] = useState<GroupChatMessageDTO | null>(null)
-  const [reactingMessageId, setReactingMessageId] = useState<number | null>(null)
+  const [members, setMembers] = useState<GroupMemberDTO[]>([])
+  const [sidebar, setSidebar] = useState<Sidebar>('none')
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [showGifPicker, setShowGifPicker] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const [uploadingFile, setUploadingFile] = useState(false)
-  const pendingReplyRef = useRef<{ replyTo: GroupChatMessageDTO; messageText: string; timestamp: number } | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const endRef = useRef<HTMLDivElement>(null)
 
-  const messageInputRef = useRef<HTMLInputElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const attachmentMenuRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const currentUsernameRef = useRef<string | null>(null)
-
-  // 일반 채팅용 WebSocket 연결
-  const {
-    isConnected: isDirectConnected,
-    sendMessage: wsSendDirectMessage,
-    startTyping: startDirectTyping,
-    stopTyping: stopDirectTyping,
-    markAsRead: markDirectAsRead,
-    typingUsers: directTypingUsers,
-  } = useDirectWebSocket({
-    roomId: selectedDirectChat,
-    enabled: isAuthenticated && currentTab === 'direct' && !!selectedDirectChat,
-    onMessage: useCallback((message: DirectChatMessageDTO) => {
-      console.log('일반 채팅 메시지 수신:', message)
-      setDirectMessages(prev => {
-        // 중복 방지
-        if (prev.some(m => m.id === message.id)) {
-          console.log('중복 메시지 무시:', message.id)
-          return prev
-        }
-        // 시간순으로 정렬
-        const newMessages = [...prev, message].sort((a, b) => 
-          new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
-        )
-        return newMessages
-      })
-      // 새 메시지가 추가되면 스크롤
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    }, []),
-    onTyping: useCallback((data: { username: string; isTyping: boolean }) => {
-      // 타이핑 상태는 훅에서 자동 관리됨
-    }, []),
-    onRead: useCallback((data: { messageId: number; username: string; isRead: boolean }) => {
-      // 읽음 상태 업데이트
-      setDirectMessages(prev => prev.map(msg => 
-        msg.id === data.messageId 
-          ? { ...msg, isRead: data.isRead ?? true } // 서버 읽음 이벤트에는 isRead가 없다: 오면 읽은 것
-          : msg
-      ))
-    }, []),
+  const direct = useDirectChatMessages({
+    roomId: selectedDirectId,
+    enabled: isAuthenticated && tab === 'direct' && !!selectedDirectId,
+    currentUsername,
   })
+  const group = useGroupChatMessages({
+    groupId: selectedGroup?.groupId || 0,
+    roomId: selectedGroup?.roomId || 0,
+    enabled: isAuthenticated && tab === 'group' && !!selectedGroup,
+    currentUsername,
+  })
+  const actions = useMessageActions(group, currentUsername)
 
-  // 현재 사용자 초기화
-  useEffect(() => {
-    if (isAuthenticated) {
-      const username = getUsernameFromToken()
-      setCurrentUsername(username)
-      currentUsernameRef.current = username
-    } else {
-      setCurrentUsername(null)
-      currentUsernameRef.current = null
-    }
-  }, [isAuthenticated])
-
-  // currentUsername 변경 시 ref 업데이트
-  useEffect(() => {
-    currentUsernameRef.current = currentUsername
-  }, [currentUsername])
-
-  // 채팅방 목록 로드
-  useEffect(() => {
-    if (isAuthenticated && currentUsername) {
-      if (currentTab === 'direct') {
-        fetchDirectChatRooms()
-      } else {
-        fetchGroupChatRooms()
-      }
-    }
-  }, [isAuthenticated, currentUsername, currentTab])
-
-  // 쿼리 파라미터로 사용자 지정 시 채팅방 생성/선택
-  useEffect(() => {
-    const targetUsername = searchParams.get('user')
-    if (targetUsername && isAuthenticated && currentUsername && currentTab === 'direct') {
-      handleStartChatWithUser(targetUsername)
-    }
-  }, [searchParams, isAuthenticated, currentUsername, currentTab])
-
-  // 특정 사용자와 채팅 시작
-  const handleStartChatWithUser = async (targetUsername: string) => {
+  const fetchDirectRooms = useCallback(async () => {
     try {
-      // 자기 자신과는 채팅 불가
-      if (targetUsername === currentUsername) {
-        console.warn('자기 자신과는 채팅할 수 없습니다.')
-        return
-      }
-
-      // 사용자 정보 조회
-      const userInfoResponse = await followApi.getUserInfo(targetUsername)
-      if (!userInfoResponse.success || !userInfoResponse.data?.id) {
-        console.error('사용자 정보를 찾을 수 없습니다:', targetUsername)
-        alert('사용자를 찾을 수 없습니다.')
-        router.replace('/chat')
-        return
-      }
-
-      const targetUserId = userInfoResponse.data.id
-
-      // 채팅방 생성 또는 조회
-      const roomResponse = await directChatApi.getOrCreateRoom(targetUserId)
-      if (roomResponse.success && roomResponse.data) {
-        // 채팅방 목록 새로고침
-        await fetchDirectChatRooms()
-        // 생성된/조회된 채팅방 선택
-        setSelectedDirectChat(roomResponse.data.id)
-        // 쿼리 파라미터 제거
-        router.replace('/chat')
-      } else {
-        console.error('채팅방 생성/조회 실패:', roomResponse.message)
-        alert(roomResponse.message || '채팅방을 생성할 수 없습니다.')
-      }
-    } catch (error: any) {
-      console.error('채팅 시작 실패:', error)
-      const errorMessage = error.response?.data?.message || error.message || '채팅을 시작할 수 없습니다.'
-      alert(errorMessage)
-      router.replace('/chat')
-    }
-  }
-
-
-  // 선택된 채팅방의 메시지 로드 및 그룹 정보 로드
-  useEffect(() => {
-    if (currentTab === 'direct' && selectedDirectChat) {
-      fetchDirectMessages(selectedDirectChat)
-    } else if (currentTab === 'group' && selectedGroupChat) {
-      fetchGroupDetail(selectedGroupChat.groupId)
-      fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
-    }
-  }, [currentTab, selectedDirectChat, selectedGroupChat])
-
-  // 그룹 상세 정보 조회
-  const fetchGroupDetail = async (groupId: number) => {
-    try {
-      const response = await groupApi.getGroupDetail(groupId)
-      if (response.success && response.data) {
-        setGroupDetail(response.data)
-      }
+      const response = await directChatApi.getMyRooms()
+      if (response.success && response.data) setDirectRooms(response.data)
     } catch (error) {
-      console.error('그룹 상세 조회 실패:', error)
+      console.error('1대1 채팅방 목록 조회 실패:', error)
     }
-  }
-
-  // 외부 클릭 시 첨부 메뉴 닫기
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
-        setShowAttachmentMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-
-  // 1대1 채팅방 목록 조회
-  const fetchDirectChatRooms = async () => {
+  // 내가 속한 모임마다 채팅방을 받아 한 목록으로 합친다
+  const fetchGroupRooms = useCallback(async () => {
     try {
-      setLoading(true)
-      const response = await directChatApi.getMyRooms()
-      if (response.success && response.data) {
-        setDirectChatRooms(response.data)
-      } else {
-        console.error('1대1 채팅방 목록 조회 실패:', response.message)
-      }
-    } catch (error: any) {
-      console.error('1대1 채팅방 목록 조회 실패:', error)
-      const errorMessage = error.response?.data?.message || error.message || '채팅방 목록을 불러올 수 없습니다.'
-      console.error('에러 상세:', errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // 그룹 채팅방 목록 조회
-  const fetchGroupChatRooms = async () => {
-    try {
-      setLoading(true)
-      // 먼저 내 그룹 목록 조회
-      const groupsResponse = await groupApi.getGroupList(0, 100, true)
-      if (!groupsResponse.success || !groupsResponse.data?.content) {
-        setGroupChatRooms([])
-        setLoading(false)
-        return
-      }
-      
-      const groups = groupsResponse.data.content.map((group: any) => ({
-        id: group.id,
-        name: group.name,
-      }))
-      setMyGroups(groups)
-      
-      // 각 그룹의 채팅방 조회
-      const allRooms: ExtendedGroupChatRoom[] = []
-      for (const group of groups) {
-        try {
-          const response = await groupApi.getChatRooms(group.id)
-          if (response.success && response.data) {
-            const rooms = response.data.map((room: GroupChatRoomDTO) => ({
-              ...room,
-              groupId: group.id,
-              groupName: group.name,
-              roomId: room.id,
-              roomName: room.name,
-              roomProfileImageUrl: room.profileImageUrl,
-              lastMessage: undefined, // TODO: 마지막 메시지 정보 추가 필요
-              lastMessageTime: undefined,
-              unreadCount: 0, // TODO: 읽지 않은 메시지 수 추가 필요
-            }))
-            allRooms.push(...rooms)
+      const groups = await groupApi.getGroupList(0, 100, true)
+      const list: { id: number; name: string }[] = groups.success ? groups.data?.content ?? [] : []
+      const perGroup = await Promise.all(
+        list.map(async (g) => {
+          try {
+            const response = await groupApi.getChatRooms(g.id)
+            return (response.success ? response.data ?? [] : []).map((room) => ({ ...room, groupId: g.id, groupName: g.name }))
+          } catch (error) {
+            console.error(`그룹 ${g.id}의 채팅방 조회 실패:`, error)
+            return []
           }
-        } catch (error) {
-          console.error(`그룹 ${group.id}의 채팅방 조회 실패:`, error)
-        }
-      }
-      setGroupChatRooms(allRooms)
+        }),
+      )
+      setGroupRooms(perGroup.flat())
     } catch (error) {
       console.error('그룹 채팅방 목록 조회 실패:', error)
-    } finally {
-      setLoading(false)
     }
-  }
-
-  // 1대1 채팅 메시지 조회
- const fetchDirectMessages = async (chatRoomId: number) => {
-  try {
-    const response = await directChatApi.getMessages(chatRoomId, 0, 100)
-    if (response.success && response.data) {
-      const list = [...(response.data.content || [])].sort(
-        (a, b) => new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
-      )
-      setDirectMessages(list)
-
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    }
-  } catch (error) {
-    console.error('1대1 채팅 메시지 조회 실패:', error)
-  }
-}
-
-const fetchGroupMessages = async (groupId: number, roomId: number) => {
-  try {
-    const response = await groupApi.getChatMessages(groupId, roomId, 0, 100)
-    if (response.success && response.data) {
-      // 최신 메시지가 아래에 오도록 역순 정렬
-      const reversedMessages = [...response.data].reverse()
-      setGroupMessages(reversedMessages)
-
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    }
-  } catch (error) {
-    console.error('그룹 채팅 메시지 조회 실패:', error)
-  }
-}
-
-  // 그룹 채팅용 WebSocket 연결
-  const {
-    isConnected: isGroupConnected,
-    sendMessage: wsSendGroupMessage,
-    startTyping: startGroupTyping,
-    stopTyping: stopGroupTyping,
-    markAsRead: markGroupAsRead,
-    typingUsers: groupTypingUsers,
-  } = useWebSocket({
-    groupId: selectedGroupChat?.groupId || 0,
-    roomId: selectedGroupChat?.roomId || 0,
-    enabled: isAuthenticated && currentTab === 'group' && !!selectedGroupChat?.groupId && !!selectedGroupChat?.roomId,
-    onMessage: useCallback((message: GroupChatMessageDTO) => {
-      console.log('그룹 채팅 메시지 수신:', message)
-      setGroupMessages(prev => {
-        // 중복 방지
-        if (prev.some(m => m.id === message.id)) {
-          console.log('중복 메시지 무시:', message.id)
-          return prev
-        }
-        
-        // 답장 정보 처리
-        let messageWithReply = message
-        
-        // 백엔드에서 답장 정보가 있는 경우
-        if (message.replyToMessageId && !message.replyToMessage) {
-          const repliedMessage = prev.find(m => m.id === message.replyToMessageId)
-          if (repliedMessage) {
-            messageWithReply = {
-              ...message,
-              replyToMessage: {
-                id: repliedMessage.id,
-                message: repliedMessage.message,
-                username: repliedMessage.username,
-                nickname: repliedMessage.nickname,
-                displayName: repliedMessage.displayName,
-                profileImageUrl: repliedMessage.profileImageUrl,
-              }
-            }
-          }
-        }
-        
-        // 프론트엔드에서 답장 정보 추가
-        if (!messageWithReply.replyToMessageId && pendingReplyRef.current && message.username === currentUsernameRef.current) {
-          const messageTime = new Date(message.createdTime).getTime()
-          const timeDiff = Math.abs(messageTime - pendingReplyRef.current.timestamp)
-          const messageMatches = message.message.trim() === pendingReplyRef.current.messageText.trim()
-          
-          if (messageMatches && timeDiff < 10000) {
-            messageWithReply = {
-              ...messageWithReply,
-              replyToMessageId: pendingReplyRef.current.replyTo.id,
-              replyToMessage: {
-                id: pendingReplyRef.current.replyTo.id,
-                message: pendingReplyRef.current.replyTo.message,
-                username: pendingReplyRef.current.replyTo.username,
-                nickname: pendingReplyRef.current.replyTo.nickname,
-                displayName: pendingReplyRef.current.replyTo.displayName,
-                profileImageUrl: pendingReplyRef.current.replyTo.profileImageUrl,
-              }
-            }
-            pendingReplyRef.current = null
-          }
-        }
-        
-        // 시간순으로 정렬
-        const newMessages = [...prev, messageWithReply].sort((a, b) => 
-          new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime()
-        )
-        return newMessages
-      })
-      // 새 메시지가 추가되면 스크롤
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    }, []),
-    onTyping: useCallback((data: { username: string; isTyping: boolean }) => {
-      // 타이핑 상태는 훅에서 자동 관리됨
-    }, []),
-    onRead: useCallback((data: { messageId: number; username: string; readCount: number }) => {
-      // 읽음 수 업데이트
-      setGroupMessages(prev => prev.map(msg => 
-        msg.id === data.messageId 
-          ? { ...msg, readCount: data.readCount }
-          : msg
-      ))
-    }, []),
-  })
-
-
-  // 메시지 전송
-const sendMessage = useCallback(async () => {
-  if (!isAuthenticated || sending) return
-  if (!newMessage.trim()) return
-
-  try {
-    setSending(true)
-
-    if (currentTab === 'direct' && selectedDirectChat) {
-      // WebSocket으로 먼저 전송 시도
-      if (isDirectConnected) {
-        const success = wsSendDirectMessage(newMessage.trim())
-        if (success) {
-          setNewMessage('')
-          stopDirectTyping()
-          if (typingTimeoutRef.current) {
-            clearTimeout(typingTimeoutRef.current)
-            typingTimeoutRef.current = null
-          }
-          return
-        }
-      }
-      
-      // WebSocket 실패 시 REST API로 폴백
-      const response = await directChatApi.sendMessage(selectedDirectChat, {
-        message: newMessage.trim(),
-        messageType: 'TEXT' as const,
-      })
-
-      if (response.success && response.data) {
-        setNewMessage('')
-        stopDirectTyping()
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current)
-          typingTimeoutRef.current = null
-        }
-        await fetchDirectMessages(selectedDirectChat)
-      } else {
-        alert(response.message || '메시지 전송에 실패했습니다.')
-      }
-    }
-
-    if (currentTab === 'group' && selectedGroupChat) {
-      // WebSocket으로 먼저 전송 시도
-      if (isGroupConnected) {
-        let messageToSend = newMessage.trim()
-        // @username으로 시작하는 부분 제거
-        if (replyingTo && messageToSend.startsWith('@')) {
-          const replyPrefix = `@${replyingTo.displayName || replyingTo.nickname} `
-          if (messageToSend.startsWith(replyPrefix)) {
-            messageToSend = messageToSend.substring(replyPrefix.length).trim()
-          } else {
-            messageToSend = messageToSend.replace(/^@\w+\s*/, '').trim()
-          }
-        }
-        
-        const success = wsSendGroupMessage(messageToSend, replyingTo?.id)
-        if (success) {
-          // 답장 정보를 ref에 저장
-          const replyInfo = replyingTo ? {
-            replyTo: replyingTo,
-            messageText: messageToSend,
-            timestamp: Date.now()
-          } : null
-          
-          if (replyInfo) {
-            pendingReplyRef.current = replyInfo
-          }
-          
-          setNewMessage('')
-          setReplyingTo(null)
-          stopGroupTyping()
-          if (typingTimeoutRef.current) {
-            clearTimeout(typingTimeoutRef.current)
-            typingTimeoutRef.current = null
-          }
-          
-          // 10초 후 pendingReplyRef 초기화
-          if (replyInfo) {
-            setTimeout(() => {
-              if (pendingReplyRef.current && pendingReplyRef.current.timestamp === replyInfo.timestamp) {
-                pendingReplyRef.current = null
-              }
-            }, 10000)
-          }
-          return
-        }
-      }
-      
-      // WebSocket 실패 시 REST API로 폴백
-      let messageToSend = newMessage.trim()
-      if (replyingTo && messageToSend.startsWith('@')) {
-        const replyPrefix = `@${replyingTo.displayName || replyingTo.nickname} `
-        if (messageToSend.startsWith(replyPrefix)) {
-          messageToSend = messageToSend.substring(replyPrefix.length).trim()
-        } else {
-          messageToSend = messageToSend.replace(/^@\w+\s*/, '').trim()
-        }
-      }
-      
-      const response = await groupApi.sendChatMessage(
-        selectedGroupChat.groupId,
-        selectedGroupChat.roomId,
-        { 
-          message: messageToSend,
-          replyToMessageId: replyingTo?.id
-        }
-      )
-
-      if (response.success) {
-        setNewMessage('')
-        setReplyingTo(null)
-        stopGroupTyping()
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current)
-          typingTimeoutRef.current = null
-        }
-        await fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
-      } else {
-        alert(response.message || '메시지 전송에 실패했습니다.')
-      }
-    }
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message || error.message || '메시지 전송에 실패했습니다.'
-    alert(errorMessage)
-  } finally {
-    setSending(false)
-    // ✅ 전송 후에도 계속 채팅 가능하게 포커스 복귀
-    requestAnimationFrame(() => messageInputRef.current?.focus())
-  }
-}, [isAuthenticated, sending, newMessage, currentTab, selectedDirectChat, selectedGroupChat, isDirectConnected, wsSendDirectMessage, stopDirectTyping, isGroupConnected, wsSendGroupMessage, replyingTo, stopGroupTyping])
-
-// 폼 submit 핸들러는 얇게
-const handleSendMessage = async (e: React.FormEvent) => {
-  e.preventDefault()
-  await sendMessage()
-}
-
-// 타이핑 인디케이터 처리
-const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const value = e.target.value
-  setNewMessage(value)
-  
-  if (typingTimeoutRef.current) {
-    clearTimeout(typingTimeoutRef.current)
-  }
-  
-  if (currentTab === 'direct' && selectedDirectChat) {
-    if (value.trim() && isDirectConnected) {
-      startDirectTyping()
-      // 3초 후 자동으로 타이핑 종료
-      typingTimeoutRef.current = setTimeout(() => {
-        stopDirectTyping()
-      }, 3000)
-    } else {
-      stopDirectTyping()
-    }
-  } else if (currentTab === 'group' && selectedGroupChat) {
-    if (value.trim() && isGroupConnected) {
-      startGroupTyping()
-      // 3초 후 자동으로 타이핑 종료
-      typingTimeoutRef.current = setTimeout(() => {
-        stopGroupTyping()
-      }, 3000)
-    } else {
-      stopGroupTyping()
-    }
-  }
-}
-
-// 메시지 표시 시 읽음 처리
-useEffect(() => {
-  if (currentTab === 'direct' && directMessages.length > 0 && isDirectConnected && currentUsername && selectedDirectChat) {
-    const lastMessage = directMessages[directMessages.length - 1]
-    // 본인이 보낸 메시지가 아니고, 아직 읽지 않은 경우
-    if (lastMessage.username !== currentUsername && !lastMessage.isRead) {
-      markDirectAsRead(lastMessage.id)
-    }
-  } else if (currentTab === 'group' && groupMessages.length > 0 && isGroupConnected && currentUsername && selectedGroupChat) {
-    const lastMessage = groupMessages[groupMessages.length - 1]
-    // 본인이 보낸 메시지가 아니고, 읽음 수가 있는 경우
-    if (lastMessage.username !== currentUsername && lastMessage.readCount !== undefined) {
-      markGroupAsRead(lastMessage.id)
-    }
-  }
-}, [directMessages, groupMessages, isDirectConnected, isGroupConnected, currentUsername, currentTab, selectedDirectChat, selectedGroupChat, markDirectAsRead, markGroupAsRead])
-
-  // 그룹 채팅 메시지 핸들러 함수들
-  const handleMessageContextMenu = (e: React.MouseEvent, messageId: number) => {
-    if (currentTab !== 'group' || !selectedGroupChat) return
-    e.preventDefault()
-    const message = groupMessages.find(m => m.id === messageId)
-    if (!message) return
-    
-    const isMyMessage = message.username === currentUsername
-    
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      messageId,
-      isMyMessage,
-    })
-  }
-
-  const closeContextMenu = () => {
-    setContextMenu(null)
-  }
+  }, [])
 
   useEffect(() => {
-    if (contextMenu) {
-      const handleClick = () => closeContextMenu()
-      window.addEventListener('click', handleClick)
-      return () => window.removeEventListener('click', handleClick)
-    }
-  }, [contextMenu])
+    if (!isAuthenticated || !currentUsername) return
+    if (tab === 'direct') fetchDirectRooms()
+    else fetchGroupRooms()
+  }, [isAuthenticated, currentUsername, tab, fetchDirectRooms, fetchGroupRooms])
 
-  const handleDeleteMessage = async (messageId: number) => {
-    if (!selectedGroupChat) return
-    if (!confirm('정말로 이 메시지를 삭제하시겠습니까?')) return
-    
-    try {
-      const response = await groupApi.deleteChatMessage(selectedGroupChat.groupId, selectedGroupChat.roomId, messageId)
-      if (response.success) {
-        setGroupMessages(prev => prev.filter(m => m.id !== messageId))
-        closeContextMenu()
-      }
-    } catch (error: any) {
-      console.error('메시지 삭제 실패:', error)
-      alert(error.response?.data?.message || '메시지 삭제에 실패했습니다.')
-    }
-  }
-
-  const handleStartEditMessage = (messageId: number) => {
-    const message = groupMessages.find(m => m.id === messageId)
-    if (message) {
-      setEditingMessageId(messageId)
-      setEditMessageText(message.message)
-      closeContextMenu()
-    }
-  }
-
-  const handleCancelEditMessage = () => {
-    setEditingMessageId(null)
-    setEditMessageText('')
-  }
-
-  const handleSaveEditMessage = async (messageId: number) => {
-    if (!editMessageText.trim()) return
-    if (!selectedGroupChat) return
-    
-    try {
-      // TODO: 메시지 수정 API 호출
-      // await groupApi.updateChatMessage(selectedGroupChat.groupId, selectedGroupChat.roomId, messageId, { message: editMessageText })
-      setGroupMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, message: editMessageText } : m
-      ))
-      setEditingMessageId(null)
-      setEditMessageText('')
-    } catch (error) {
-      console.error('메시지 수정 실패:', error)
-      alert('메시지 수정에 실패했습니다.')
-    }
-  }
-
-  const handleReplyMessage = (messageId: number) => {
-    const message = groupMessages.find(m => m.id === messageId)
-    if (message) {
-      setReplyingTo(message)
-      setNewMessage('')
-      closeContextMenu()
-      setTimeout(() => {
-        messageInputRef.current?.focus()
-      }, 100)
-    }
-  }
-
-  const handleCancelReply = () => {
-    setReplyingTo(null)
-  }
-
-  const handleAddReaction = async (messageId: number, emoji: string) => {
-    if (!selectedGroupChat) return
-    try {
-      const response = await groupApi.toggleReaction(selectedGroupChat.groupId, selectedGroupChat.roomId, messageId, emoji)
-      if (response.success) {
-        const messageResponse = await groupApi.getChatMessages(selectedGroupChat.groupId, selectedGroupChat.roomId, 0, 100)
-        if (messageResponse.success && messageResponse.data) {
-          const updatedMessage = messageResponse.data.find(m => m.id === messageId)
-          if (updatedMessage) {
-            setGroupMessages(prev => prev.map(m => 
-              m.id === messageId ? updatedMessage : m
-            ))
-          }
-        }
-        setReactingMessageId(null)
-        closeContextMenu()
-      }
-    } catch (error: any) {
-      console.error('반응 추가/제거 실패:', error)
-      alert(error.response?.data?.message || '반응 추가/제거에 실패했습니다.')
-    }
-  }
-
-  const handleOpenReactionMenu = (messageId: number) => {
-    setReactingMessageId(messageId)
-    closeContextMenu()
-  }
-
-  const handleGifSelect = async (gifUrl: string) => {
-    if (!isAuthenticated || !selectedGroupChat) return
-
-    try {
-      setSending(true)
-      const response = await groupApi.sendChatMessage(selectedGroupChat.groupId, selectedGroupChat.roomId, {
-        message: '',
-        messageType: 'IMAGE',
-        fileUrl: gifUrl
-      } as any)
-      
-      if (response.success) {
-        setTimeout(() => {
-          fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
-        }, 500)
-      }
-    } catch (error: any) {
-      console.error('GIF 전송 실패:', error)
-      alert(error.response?.data?.message || 'GIF 전송에 실패했습니다.')
-    } finally {
-      setSending(false)
-    }
-  }
-
-
-  // 이미지 업로드
-  const handleImageUpload = async (file: File) => {
-    try {
-      setUploadingImage(true)
-      const uploadResponse = await imageUploadApi.uploadImage(file)
-      if (uploadResponse.success && uploadResponse.data) {
-        if (currentTab === 'direct' && selectedDirectChat) {
-          const response = await directChatApi.sendMessage(selectedDirectChat, {
-            message: '',
-            messageType: 'IMAGE' as const,
-            fileUrl: uploadResponse.data.url,
-          })
-          if (response.success && response.data) {
-            await fetchDirectMessages(selectedDirectChat)
-          } else {
-            console.error('이미지 메시지 전송 실패:', response.message)
-            alert(response.message || '이미지 전송에 실패했습니다.')
-          }
-        } else if (currentTab === 'group' && selectedGroupChat) {
-          const response = await groupApi.sendChatMessage(
-            selectedGroupChat.groupId,
-            selectedGroupChat.roomId,
-            {
-              message: '',
-              messageType: 'IMAGE',
-              fileUrl: uploadResponse.data.url,
-            } as any
-          )
-          if (response.success) {
-            setTimeout(() => {
-              fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
-            }, 500)
-          } else {
-            console.error('이미지 메시지 전송 실패:', response.message)
-            alert(response.message || '이미지 전송에 실패했습니다.')
-          }
-        }
-      } else {
-        console.error('이미지 업로드 실패:', uploadResponse.message)
-        alert(uploadResponse.message || '이미지 업로드에 실패했습니다.')
-      }
-    } catch (error: any) {
-      console.error('이미지 업로드 실패:', error)
-      const errorMessage = error.response?.data?.message || error.message || '이미지 업로드에 실패했습니다.'
-      alert(errorMessage)
-    } finally {
-      setUploadingImage(false)
-      setShowAttachmentMenu(false)
-    }
-  }
-
-  // 파일 업로드
-  const handleFileUpload = async (file: File) => {
-    try {
-      setUploadingFile(true)
-      let fileUrl: string
-      let fileName: string
-      let fileSize: number
-      
+  // ?user=아이디: 그 사람과의 1대1 방을 만들거나 찾아서 연다
+  useEffect(() => {
+    const targetUsername = searchParams.get('user')
+    if (!targetUsername || !isAuthenticated || !currentUsername || tab !== 'direct') return
+    if (targetUsername === currentUsername) return
+    ;(async () => {
       try {
-        const uploadResponse = await fileUploadApi.uploadFile(file)
-        if (uploadResponse.success && uploadResponse.data) {
-          fileUrl = uploadResponse.data.url
-          fileName = uploadResponse.data.originalFilename || file.name
-          fileSize = uploadResponse.data.fileSize || file.size
-        } else {
-          throw new Error('파일 업로드 실패')
+        const userInfo = await followApi.getUserInfo(targetUsername)
+        if (!userInfo.success || !userInfo.data?.id) {
+          alert('사용자를 찾을 수 없습니다.')
+          router.replace('/chat')
+          return
         }
-      } catch (uploadError) {
-        // 파일 업로드 API가 없으면 이미지 업로드 API 사용 (임시)
-        const uploadResponse = await imageUploadApi.uploadImage(file)
-        if (uploadResponse.success && uploadResponse.data) {
-          fileUrl = uploadResponse.data.url
-          fileName = file.name
-          fileSize = file.size
+        const room = await directChatApi.getOrCreateRoom(userInfo.data.id)
+        if (room.success && room.data) {
+          await fetchDirectRooms()
+          setSelectedDirectId(room.data.id)
+          router.replace('/chat')
         } else {
-          throw new Error('파일 업로드 실패')
+          alert(room.message || '채팅방을 생성할 수 없습니다.')
         }
+      } catch (error: any) {
+        alert(error.response?.data?.message || error.message || '채팅을 시작할 수 없습니다.')
+        router.replace('/chat')
       }
-      
-      if (currentTab === 'direct' && selectedDirectChat) {
-        const response = await directChatApi.sendMessage(selectedDirectChat, {
-          message: '',
-          messageType: 'FILE' as const,
-          fileUrl: fileUrl,
-          fileName: fileName,
-          fileSize: fileSize,
-        })
-        if (response.success && response.data) {
-          await fetchDirectMessages(selectedDirectChat)
-        } else {
-          console.error('파일 메시지 전송 실패:', response.message)
-          alert(response.message || '파일 전송에 실패했습니다.')
-        }
-      } else if (currentTab === 'group' && selectedGroupChat) {
-        const response = await groupApi.sendChatMessage(
-          selectedGroupChat.groupId,
-          selectedGroupChat.roomId,
-          {
-            message: '',
-            messageType: 'FILE',
-            fileUrl: fileUrl,
-            fileName: fileName,
-            fileSize: fileSize,
-          } as any
-        )
-        if (response.success) {
-          setTimeout(() => {
-            fetchGroupMessages(selectedGroupChat.groupId, selectedGroupChat.roomId)
-          }, 500)
-        } else {
-          console.error('파일 메시지 전송 실패:', response.message)
-          alert(response.message || '파일 전송에 실패했습니다.')
-        }
-      }
-    } catch (error: any) {
-      console.error('파일 업로드 실패:', error)
-      const errorMessage = error.response?.data?.message || error.message || '파일 업로드에 실패했습니다.'
-      alert(errorMessage)
-    } finally {
-      setUploadingFile(false)
-      setShowAttachmentMenu(false)
-    }
-  }
+    })()
+  }, [searchParams, isAuthenticated, currentUsername, tab, router, fetchDirectRooms])
 
-  // 채팅 검색
-  const handleSearchMessages = async (query: string) => {
-    try {
-      setSearchQuery(query)
-      // TODO: 백엔드 검색 API 구현 후 연동
-      // if (currentTab === 'direct' && selectedDirectChat) {
-      //   const response = await directChatApi.searchMessages(selectedDirectChat, query)
-      //   // 검색 결과 표시
-      // } else if (currentTab === 'group' && selectedGroupChat) {
-      //   const response = await groupApi.searchChatMessages(
-      //     selectedGroupChat.groupId, 
-      //     selectedGroupChat.roomId, 
-      //     query
-      //   )
-      //   // 검색 결과 표시
-      // }
-    } catch (error) {
-      console.error('채팅 검색 실패:', error)
-    }
-  }
-
-  // 이미지 선택
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedImage(file)
-      handleImageUpload(file)
-    }
-  }
-
-  // 파일 선택
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      handleFileUpload(file)
-    }
-  }
-
-  // 현재 선택된 채팅방 정보
-  const currentChatRoom = currentTab === 'direct' 
-    ? directChatRooms.find(room => room.id === selectedDirectChat)
-    : groupChatRooms.find(room => room.groupId === selectedGroupChat?.groupId && room.roomId === selectedGroupChat?.roomId)
-  
-  // 메시지 스크롤 하단으로
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [directMessages, groupMessages])
+    if (tab !== 'group' || !selectedGroup) return
+    groupApi
+      .getGroupDetail(selectedGroup.groupId)
+      .then((response) => response.success && response.data && setGroupDetail(response.data))
+      .catch((error) => console.error('그룹 상세 조회 실패:', error))
+  }, [tab, selectedGroup])
 
-  // 필터링된 채팅방 목록
-  const filteredDirectRooms = directChatRooms.filter(room =>
-    room.otherNickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    room.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  useEffect(() => {
+    if (sidebar !== 'members' || !selectedGroup) return
+    groupApi
+      .getGroupMembers(selectedGroup.groupId)
+      .then((response) => response.success && response.data && setMembers(response.data))
+      .catch((error) => console.error('멤버 목록 조회 실패:', error))
+  }, [sidebar, selectedGroup])
 
-  const filteredGroupRooms = groupChatRooms.filter(room =>
-    room.roomName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    room.groupName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    room.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const messages = tab === 'direct' ? direct.messages : group.messages
+  // 메시지가 바뀌면 맨 아래로
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
-useEffect(() => {
-  if (currentChatRoom) {
-    requestAnimationFrame(() => messageInputRef.current?.focus())
+  const changeTab = (next: InboxTab) => {
+    setTab(next)
+    setSelectedDirectId(null)
+    setSelectedGroup(null)
+    setSidebar('none')
   }
-}, [currentChatRoom])
 
-  // 현재 메시지 목록 (타입 변환)
-  const currentMessages: Array<DirectChatMessageDTO | GroupChatMessageDTO> = currentTab === 'direct' 
-    ? directMessages 
-    : groupMessages
+  const currentDirect = tab === 'direct' ? directRooms.find((r) => r.id === selectedDirectId) : undefined
+  const currentGroup =
+    tab === 'group' ? groupRooms.find((r) => r.groupId === selectedGroup?.groupId && r.id === selectedGroup?.roomId) : undefined
 
   if (!isAuthenticated) {
     return (
@@ -971,20 +162,12 @@ useEffect(() => {
         <div className="flex items-center justify-center h-screen">
           <div className="text-center">
             <p className="text-lg text-gray-600 mb-4">로그인이 필요합니다.</p>
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
+            <button onClick={() => setShowLoginModal(true)} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
               로그인
             </button>
           </div>
         </div>
-        {showLoginModal && (
-          <LoginModal
-            isOpen={showLoginModal}
-            onClose={() => setShowLoginModal(false)}
-          />
-        )}
+        {showLoginModal && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />}
       </div>
     )
   }
@@ -992,765 +175,98 @@ useEffect(() => {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <Header onLoginClick={() => setShowLoginModal(true)} />
-      
+
       <div className="flex-1 flex overflow-hidden">
-        {/* 왼쪽: 채팅방 목록 */}
-        <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-          {/* 탭 선택 */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setCurrentTab('direct')
-                  setSelectedDirectChat(null)
-                  setSelectedGroupChat(null)
-                }}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  currentTab === 'direct'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                1대1 채팅
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentTab('group')
-                  setSelectedDirectChat(null)
-                  setSelectedGroupChat(null)
-                }}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  currentTab === 'group'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                그룹 채팅
-              </button>
-            </div>
-          </div>
+        <InboxRoomList
+          tab={tab}
+          onTabChange={changeTab}
+          directRooms={directRooms}
+          groupRooms={groupRooms}
+          selectedDirectId={selectedDirectId}
+          selectedGroup={selectedGroup}
+          onSelectDirect={setSelectedDirectId}
+          onSelectGroup={(room) => setSelectedGroup({ groupId: room.groupId, roomId: room.id })}
+        />
 
-          {/* 채팅방 목록 */}
-          <div className="flex-1 overflow-y-auto">
-            {currentTab === 'direct' ? (
-              filteredDirectRooms.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  {searchQuery ? '검색 결과가 없습니다.' : '1대1 채팅방이 없습니다.'}
-                </div>
-              ) : (
-                <div className="p-2">
-                  {filteredDirectRooms.map((room) => (
-                    <div
-                      key={room.id}
-                      onClick={() => setSelectedDirectChat(room.id)}
-                      className={`p-3 rounded-lg cursor-pointer transition mb-1 ${
-                        selectedDirectChat === room.id
-                          ? 'bg-blue-50 border-l-4 border-blue-500'
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0">
-                          {room.otherProfileImageUrl ? (
-                            <img
-                              src={room.otherProfileImageUrl}
-                              alt={room.otherNickname}
-                              className="w-12 h-12 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center">
-                              <span className="text-gray-600 font-semibold">
-                                {room.otherNickname.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <h3 className="font-medium text-gray-800 truncate">
-                              {room.otherNickname}
-                            </h3>
-                            {room.unreadCount > 0 && (
-                              <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
-                                {room.unreadCount}
-                              </span>
-                            )}
-                          </div>
-                          {room.lastMessage && (
-                            <p className="text-xs text-gray-500 truncate">
-                              {room.lastMessage}
-                            </p>
-                          )}
-                          {room.lastMessageTime && (
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {format(new Date(room.lastMessageTime), 'MM/dd HH:mm', { locale: ko })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : (
-              filteredGroupRooms.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  {searchQuery ? '검색 결과가 없습니다.' : '그룹 채팅방이 없습니다.'}
-                </div>
-              ) : (
-                <div className="p-2">
-                  {filteredGroupRooms.map((room) => (
-                    <div
-                      key={`${room.groupId}-${room.roomId}`}
-                      onClick={() => setSelectedGroupChat({ groupId: room.groupId, roomId: room.roomId })}
-                      className={`p-3 rounded-lg cursor-pointer transition mb-1 ${
-                        selectedGroupChat?.groupId === room.groupId && selectedGroupChat?.roomId === room.roomId
-                          ? 'bg-blue-50 border-l-4 border-blue-500'
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0">
-                          {room.roomProfileImageUrl ? (
-                            <img
-                              src={room.roomProfileImageUrl}
-                              alt={room.roomName}
-                              className="w-12 h-12 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="text-blue-600 font-semibold text-sm">
-                                {room.roomName.charAt(0)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1 min-w-0">
-                              <h3 className="font-medium text-gray-800 truncate">
-                                {room.roomName}
-                              </h3>
-                              <span className="text-xs text-gray-400 truncate">
-                                ({room.groupName})
-                              </span>
-                            </div>
-                            {room.unreadCount > 0 && (
-                              <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full flex-shrink-0">
-                                {room.unreadCount}
-                              </span>
-                            )}
-                          </div>
-                          {room.lastMessage && (
-                            <p className="text-xs text-gray-500 truncate">
-                              {room.lastMessage}
-                            </p>
-                          )}
-                          {room.lastMessageTime && (
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {format(new Date(room.lastMessageTime), 'MM/dd HH:mm', { locale: ko })}
-                            </p>
-                          )}
-                          {room.createdTime && !room.lastMessageTime && (
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {format(new Date(room.createdTime), 'MM/dd HH:mm', { locale: ko })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* 오른쪽: 채팅 영역 */}
         <div className="flex-1 flex flex-col bg-white">
-          {currentChatRoom ? (
+          {currentDirect ? (
             <>
-              {/* 채팅방 헤더 */}
-              <div className="p-4 border-b border-gray-200 bg-white">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {currentTab === 'direct' && currentChatRoom && 'otherProfileImageUrl' in currentChatRoom ? (
-                      <>
-                        {currentChatRoom.otherProfileImageUrl ? (
-                          <img
-                            src={currentChatRoom.otherProfileImageUrl}
-                            alt={currentChatRoom.otherNickname}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center">
-                            <span className="text-gray-600 font-semibold">
-                              {currentChatRoom.otherNickname.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
-                        <h3 className="text-lg font-semibold text-gray-800">
-                          {currentChatRoom.otherNickname}
-                        </h3>
-                      </>
-                    ) : (
-                      <>
-                        {currentChatRoom && 'roomProfileImageUrl' in currentChatRoom && currentChatRoom.roomProfileImageUrl ? (
-                          <img
-                            src={currentChatRoom.roomProfileImageUrl}
-                            alt={currentChatRoom.roomName}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold">
-                              {currentChatRoom && 'roomName' in currentChatRoom ? currentChatRoom.roomName.charAt(0) : 'G'}
-                            </span>
-                          </div>
-                        )}
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-800">
-                            {currentChatRoom && 'roomName' in currentChatRoom ? currentChatRoom.roomName : ''}
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            {currentChatRoom && 'groupName' in currentChatRoom ? currentChatRoom.groupName : ''}
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {/* 검색 버튼 */}
-                    <div className="relative">
-                      <button
-                        onClick={() => {
-                          const query = prompt('검색어를 입력하세요:')
-                          if (query) {
-                            handleSearchMessages(query)
-                          }
-                        }}
-                        className="p-2 text-gray-400 hover:text-gray-600 transition"
-                        title="채팅 검색"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </button>
-                      {searchQuery && (
-                        <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[300px] z-50">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">검색 결과: "{searchQuery}"</span>
-                            <button
-                              onClick={() => setSearchQuery('')}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <div className="max-h-60 overflow-y-auto">
-                            {/* TODO: 검색 결과 표시 */}
-                            <p className="text-sm text-gray-500">검색 결과는 백엔드 구현 후 표시됩니다.</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {/* 인원수 버튼 (그룹 채팅만) */}
-                    {currentTab === 'group' && groupDetail && (
-                      <button
-                        onClick={() => {
-                          // TODO: 멤버 목록 표시
-                          alert('멤버 목록 기능은 백엔드 구현 후 추가됩니다.')
-                        }}
-                        className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition flex items-center gap-1"
-                        title="멤버 목록"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span>{groupDetail.memberCount || 0}</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 메시지 영역 */}
-              <div
-                ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
-              >
-                {currentMessages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center text-gray-500">
-                      <p className="text-lg mb-2">메시지가 없습니다.</p>
-                      <p className="text-sm">첫 메시지를 보내보세요!</p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {currentMessages.map((message, index) => {
-                      const isMyMessage = currentUsername === message.username
-                      const displayName = 'displayName' in message ? message.displayName : undefined
-                      const isNewMessage = index === currentMessages.length - 1
-                      const isGroupMessage = currentTab === 'group' && 'isAdmin' in message
-                      
-                      return (
-                        <div
-                          key={message.id}
-                          data-message-id={message.id}
-                          className={`flex gap-3 ${isMyMessage ? 'flex-row-reverse' : ''} ${
-                            isNewMessage ? 'animate-slide-in' : ''
-                          }`}
-                          onContextMenu={isGroupMessage ? (e) => handleMessageContextMenu(e, message.id) : undefined}
-                        >
-                          <div className="flex-shrink-0">
-                            {message.profileImageUrl ? (
-                              <img
-                                src={message.profileImageUrl}
-                                alt={message.nickname}
-                                className="w-10 h-10 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-semibold">
-                                {message.nickname.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                          <div className={`flex-1 ${isMyMessage ? 'flex flex-col items-end' : ''}`}>
-                            <div className={`flex items-baseline gap-2 mb-1 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
-                              <div className="flex items-center gap-1">
-                                <span className="font-semibold text-sm text-gray-800">
-                                  {displayName || message.nickname}
-                                </span>
-                                {isGroupMessage && message.isAdmin && (
-                                  <svg
-                                    className="w-4 h-4 text-yellow-500"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <title>관리자</title>
-                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                  </svg>
-                                )}
-                                {isMyMessage && <span className="text-blue-500 ml-1 text-xs">(나)</span>}
-                              </div>
-                              <span className="text-xs text-gray-500">
-                                {format(new Date(message.createdTime), 'HH:mm', { locale: ko })}
-                              </span>
-                            </div>
-                            <div className={`flex items-end gap-2 ${isMyMessage ? 'flex-row-reverse' : ''}`}>
-                              {isGroupMessage && editingMessageId === message.id ? (
-                                <div className="flex-1">
-                                  <input
-                                    type="text"
-                                    value={editMessageText}
-                                    onChange={(e) => setEditMessageText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault()
-                                        handleSaveEditMessage(message.id)
-                                      } else if (e.key === 'Escape') {
-                                        handleCancelEditMessage()
-                                      }
-                                    }}
-                                    className="w-full px-3 py-2 border border-blue-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                    autoFocus
-                                  />
-                                  <div className="flex gap-2 mt-2">
-                                    <button
-                                      onClick={() => handleSaveEditMessage(message.id)}
-                                      className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                                    >
-                                      저장
-                                    </button>
-                                    <button
-                                      onClick={handleCancelEditMessage}
-                                      className="px-3 py-1 bg-gray-200 text-gray-800 rounded text-xs hover:bg-gray-300"
-                                    >
-                                      취소
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="flex flex-col gap-1">
-                                    {/* 답장된 메시지 표시 - 그룹 채팅만 */}
-                                    {isGroupMessage && message.replyToMessageId && message.replyToMessage && (
-                                      <div 
-                                        className={`flex items-center gap-2 mb-1 px-2 py-1 rounded border-l-4 cursor-pointer hover:opacity-80 transition ${isMyMessage ? 'bg-blue-400 bg-opacity-20 border-blue-300' : 'bg-gray-100 border-gray-300'}`}
-                                        onClick={() => {
-                                          const repliedElement = document.querySelector(`[data-message-id="${message.replyToMessageId}"]`)
-                                          if (repliedElement) {
-                                            repliedElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                                            repliedElement.classList.add('ring-2', 'ring-blue-500')
-                                            setTimeout(() => {
-                                              repliedElement.classList.remove('ring-2', 'ring-blue-500')
-                                            }, 2000)
-                                          }
-                                        }}
-                                      >
-                                        <div className="flex-shrink-0">
-                                          {message.replyToMessage.profileImageUrl ? (
-                                            <img
-                                              src={message.replyToMessage.profileImageUrl}
-                                              alt={message.replyToMessage.nickname}
-                                              className="w-5 h-5 rounded-full object-cover"
-                                            />
-                                          ) : (
-                                            <div className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center">
-                                              <span className="text-[10px] text-gray-600 font-semibold">
-                                                {(message.replyToMessage.displayName || message.replyToMessage.nickname).charAt(0).toUpperCase()}
-                                              </span>
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-1 min-w-0 flex-1">
-                                          <span className={`text-xs font-medium truncate ${isMyMessage ? 'text-blue-50' : 'text-gray-700'}`}>
-                                            {message.replyToMessage.displayName || message.replyToMessage.nickname}
-                                          </span>
-                                          <span className={`text-xs truncate ${isMyMessage ? 'text-blue-100' : 'text-gray-500'}`}>
-                                            {message.replyToMessage.message.length > 50 
-                                              ? message.replyToMessage.message.substring(0, 50) + '...'
-                                              : message.replyToMessage.message}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    )}
-                                    <div
-                                      className={`rounded-lg px-4 py-2 inline-block max-w-md w-fit relative group ${
-                                        isMyMessage
-                                          ? 'bg-blue-500 text-white'
-                                          : 'bg-white text-gray-900 border border-gray-200'
-                                      }`}
-                                    >
-                                      {/* 이미지 메시지 */}
-                                      {message.messageType === 'IMAGE' && message.fileUrl ? (
-                                        <img
-                                          src={message.fileUrl}
-                                          alt="이미지"
-                                          className="max-w-full h-auto rounded cursor-pointer"
-                                          onClick={() => window.open(message.fileUrl, '_blank')}
-                                        />
-                                      ) : message.messageType === 'FILE' && message.fileUrl ? (
-                                        /* 파일 메시지 */
-                                        <a
-                                          href={message.fileUrl}
-                                          download={message.fileName}
-                                          className={`flex items-center gap-2 text-sm hover:underline ${
-                                            isMyMessage ? 'text-white' : 'text-gray-900'
-                                          }`}
-                                        >
-                                          <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                          </svg>
-                                          <div className="min-w-0">
-                                            <div className="truncate">{message.fileName || '파일'}</div>
-                                            {message.fileSize && (
-                                              <div className={`text-xs ${isMyMessage ? 'text-blue-100' : 'text-gray-500'}`}>
-                                                {(message.fileSize / 1024).toFixed(1)} KB
-                                              </div>
-                                            )}
-                                          </div>
-                                        </a>
-                                      ) : (
-                                        /* 텍스트 메시지 */
-                                        <p className="text-sm whitespace-pre-wrap break-words">
-                                          {message.message}
-                                        </p>
-                                      )}
-                                      {/* 반응 표시 - 그룹 채팅만 */}
-                                      {isGroupMessage && message.reactions && message.reactions.length > 0 && (
-                                        <div className="flex gap-1 mt-2 flex-wrap">
-                                          {message.reactions.map((reaction, idx) => (
-                                            <button
-                                              key={idx}
-                                              onClick={() => handleAddReaction(message.id, reaction.emoji)}
-                                              className={`px-2 py-1 rounded-full text-xs hover:bg-opacity-30 transition ${
-                                                message.myReactions?.includes(reaction.emoji)
-                                                  ? 'bg-blue-500 bg-opacity-30'
-                                                  : 'bg-black bg-opacity-20'
-                                              }`}
-                                            >
-                                              {reaction.emoji} {reaction.count}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {/* 읽음 표시 */}
-                                  {currentTab === 'direct' && isMyMessage && 'isRead' in message && message.isRead && (
-                                    <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">
-                                      ✓
-                                    </span>
-                                  )}
-                                  {isGroupMessage && isMyMessage && groupDetail?.memberCount && (
-                                    <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">
-                                      {(() => {
-                                        const unreadCount = Math.max(0, (groupDetail.memberCount || 0) - (message.readCount || 0) - 1)
-                                        return unreadCount > 0 ? `읽음 ${unreadCount}` : ''
-                                      })()}
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {/* 타이핑 인디케이터 영역 */}
-                    <div className="px-4 py-2 min-h-[40px] flex items-center">
-                      {currentTab === 'direct' && directTypingUsers.length > 0 ? (
-                        <div className="text-sm text-gray-500 italic">
-                          {directTypingUsers.length === 1 
-                            ? `${directTypingUsers[0]}님이 입력 중...`
-                            : `${directTypingUsers.length}명이 입력 중...`
-                          }
-                        </div>
-                      ) : currentTab === 'group' && groupTypingUsers.length > 0 ? (
-                        <div className="text-sm text-gray-500 italic">
-                          {groupTypingUsers.length === 1 
-                            ? `${groupTypingUsers[0]}님이 입력 중...`
-                            : `${groupTypingUsers.length}명이 입력 중...`
-                          }
-                        </div>
-                      ) : (
-                        <div className="text-sm text-transparent">공간</div>
-                      )}
-                    </div>
-                    {/* 연결 상태 표시 - 그룹 채팅만 */}
-                    {currentTab === 'group' && !isGroupConnected && (
-                      <div className="px-4 py-2 text-xs text-yellow-600 bg-yellow-50 rounded">
-                        연결 중... 메시지가 지연될 수 있습니다.
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </>
-                )}
-              </div>
-
-              {/* 입력 영역 */}
-              <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-4 bg-white">
-                {/* 답글 표시 - 그룹 채팅만 */}
-                {currentTab === 'group' && replyingTo && (
-                  <div className="mb-2 p-2 bg-gray-100 rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-xs text-gray-500">답장:</span>
-                      <span className="text-xs text-gray-700 truncate">
-                        @{replyingTo.displayName || replyingTo.nickname || replyingTo.username}: {replyingTo.message}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCancelReply}
-                      className="text-gray-400 hover:text-gray-600 text-sm"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-                <div className="flex gap-2 items-end">
-                  {/* 첨부 버튼 */}
-                  <div className="relative" ref={attachmentMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                      disabled={sending || !isAuthenticated || (currentTab === 'group' && (uploadingImage || uploadingFile))}
-                      className="p-2 text-gray-400 hover:text-gray-600 transition disabled:opacity-50"
-                      title="첨부"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                    {/* 첨부 메뉴 */}
-                    {showAttachmentMenu && (
-                      <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[150px] z-50">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            imageInputRef.current?.click()
-                            setShowAttachmentMenu(false)
-                          }}
-                          disabled={currentTab === 'group' && uploadingImage}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 disabled:opacity-50"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          {currentTab === 'group' && uploadingImage ? '업로드 중...' : '이미지'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            fileInputRef.current?.click()
-                            setShowAttachmentMenu(false)
-                          }}
-                          disabled={currentTab === 'group' && uploadingFile}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 disabled:opacity-50"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                          </svg>
-                          {currentTab === 'group' && uploadingFile ? '업로드 중...' : '파일'}
-                        </button>
-                        {/* GIF 버튼 - 그룹 채팅만 */}
-                        {currentTab === 'group' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowGifPicker(true)
-                              setShowAttachmentMenu(false)
-                            }}
-                            disabled={sending}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 disabled:opacity-50"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            GIF
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={messageInputRef}
-                    type="text"
-                    value={newMessage}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                      if ((e.nativeEvent as any).isComposing) return
-
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        sendMessage()
-                      }
-                    }}
-                    placeholder={currentTab === 'group' && replyingTo ? `@${replyingTo.nickname}에게 답장...` : "메시지를 입력하세요..."}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={!isAuthenticated || sending || (currentTab === 'group' && (!isGroupConnected || uploadingImage || uploadingFile))}
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={sending || !newMessage.trim() || !isAuthenticated || (currentTab === 'group' && (uploadingImage || uploadingFile))}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                  >
-                    {sending ? '전송 중...' : '전송'}
-                  </button>
-                </div>
-                {!isAuthenticated && (
-                  <p className="text-sm text-gray-500 mt-2 text-center">
-                    로그인이 필요합니다.
-                  </p>
-                )}
-              </form>
-
-              {/* 컨텍스트 메뉴 - 그룹 채팅만 */}
-              {currentTab === 'group' && contextMenu && (
-                <div
-                  className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
-                  style={{
-                    left: `${contextMenu.x}px`,
-                    top: `${contextMenu.y}px`,
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    onClick={() => handleOpenReactionMenu(contextMenu.messageId)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    반응 추가
-                  </button>
-                  {contextMenu.isMyMessage ? (
-                    <>
-                      <button
-                        onClick={() => handleStartEditMessage(contextMenu.messageId)}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        수정
-                      </button>
-                      <button
-                        onClick={() => handleReplyMessage(contextMenu.messageId)}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        답글
-                      </button>
-                      <button
-                        onClick={() => handleDeleteMessage(contextMenu.messageId)}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                      >
-                        삭제
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => handleReplyMessage(contextMenu.messageId)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      답글
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* 반응 선택 모달 - 그룹 채팅만 */}
-              {currentTab === 'group' && reactingMessageId && (
-                <div
-                  className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center"
-                  onClick={() => setReactingMessageId(null)}
-                >
-                  <div
-                    className="bg-white rounded-lg p-4 shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="text-sm font-semibold mb-3">반응 선택</div>
-                    <div className="flex gap-2">
-                      {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => handleAddReaction(reactingMessageId, emoji)}
-                          className="text-2xl hover:scale-125 transition-transform px-2 py-1 hover:bg-gray-100 rounded"
-                          title={emoji}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setReactingMessageId(null)}
-                      className="mt-3 w-full px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* GIF 선택 모달 - 그룹 채팅만 */}
-              {currentTab === 'group' && (
-                <GifPicker
-                  isOpen={showGifPicker}
-                  onClose={() => setShowGifPicker(false)}
-                  onSelect={handleGifSelect}
-                />
-              )}
+              <InboxChatHeader variant="direct" title={currentDirect.otherNickname} imageUrl={currentDirect.otherProfileImageUrl} />
+              <MessageList
+                containerRef={containerRef}
+                endRef={endRef}
+                messages={direct.messages}
+                currentUsername={currentUsername}
+                readLabelOf={(m, isMine) => (isMine && m.isRead ? '✓' : undefined)}
+                typingUsers={direct.typingUsers}
+                showConnectionWarning={false}
+              />
+              <MessageComposer
+                isAuthenticated={isAuthenticated}
+                onRequireLogin={() => setShowLoginModal(true)}
+                isConnected={direct.isConnected}
+                requireConnection={false}
+                sending={direct.sending}
+                uploadingImage={direct.uploadingImage}
+                uploadingFile={direct.uploadingFile}
+                replyingTo={null}
+                onCancelReply={() => {}}
+                onSend={direct.send}
+                onStartTyping={direct.startTyping}
+                onStopTyping={direct.stopTyping}
+                onPickImage={direct.sendImage}
+                onPickFile={direct.sendFile}
+                focusKey={currentDirect.id}
+              />
+            </>
+          ) : currentGroup && selectedGroup ? (
+            <>
+              <InboxChatHeader
+                variant="group"
+                title={currentGroup.name}
+                subtitle={currentGroup.groupName}
+                imageUrl={currentGroup.profileImageUrl}
+                memberCount={groupDetail?.memberCount}
+                onOpenSearch={() => setSidebar('search')}
+                onToggleMembers={groupDetail ? () => setSidebar(sidebar === 'members' ? 'none' : 'members') : undefined}
+              />
+              <MessageList
+                containerRef={containerRef}
+                endRef={endRef}
+                messages={group.messages}
+                currentUsername={currentUsername}
+                readLabelOf={(m, isMine) =>
+                  isMine && groupDetail?.memberCount ? groupReadLabel(groupDetail.memberCount, m.readCount) : undefined
+                }
+                typingUsers={group.typingUsers}
+                showConnectionWarning={!group.isConnected}
+                editing={actions.editing}
+                onContextMenu={actions.onContextMenu}
+                onToggleReaction={actions.toggleReaction}
+              />
+              <MessageComposer
+                isAuthenticated={isAuthenticated}
+                onRequireLogin={() => setShowLoginModal(true)}
+                isConnected={group.isConnected}
+                sending={group.sending}
+                uploadingImage={group.uploadingImage}
+                uploadingFile={group.uploadingFile}
+                replyingTo={actions.replyingTo}
+                onCancelReply={() => actions.setReplyingTo(null)}
+                onSend={async (text) => {
+                  const sent = await group.send(text, actions.replyingTo)
+                  if (sent) actions.setReplyingTo(null)
+                  return sent
+                }}
+                onStartTyping={group.startTyping}
+                onStopTyping={group.stopTyping}
+                onPickImage={group.sendImage}
+                onPickFile={group.sendFile}
+                onOpenGif={() => setShowGifPicker(true)}
+                focusKey={`${selectedGroup.groupId}-${selectedGroup.roomId}`}
+              />
+              <MessageOverlays actions={actions} />
+              <GifPicker isOpen={showGifPicker} onClose={() => setShowGifPicker(false)} onSelect={group.sendGif} />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
@@ -1761,14 +277,19 @@ useEffect(() => {
             </div>
           )}
         </div>
+
+        {currentGroup && selectedGroup && sidebar === 'search' && (
+          <ChatSearchSidebar
+            groupId={selectedGroup.groupId}
+            roomId={selectedGroup.roomId}
+            loadedMessages={group.messages}
+            onClose={() => setSidebar('none')}
+          />
+        )}
+        {currentGroup && sidebar === 'members' && <MembersSidebar members={members} onClose={() => setSidebar('none')} />}
       </div>
 
-      {showLoginModal && (
-        <LoginModal
-          isOpen={showLoginModal}
-          onClose={() => setShowLoginModal(false)}
-        />
-      )}
+      {showLoginModal && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />}
     </div>
   )
 }

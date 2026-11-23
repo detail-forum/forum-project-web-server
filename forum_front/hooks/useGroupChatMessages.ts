@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fileUploadApi, groupApi, imageUploadApi } from '@/services/api'
+import { groupApi, imageUploadApi } from '@/services/api'
+import { uploadChatFile } from '@/utils/chatUpload'
 import type { GroupChatMessageDTO } from '@/types/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -173,22 +174,7 @@ export function useGroupChatMessages({ groupId, roomId, enabled, currentUsername
   const sendFile = async (file: File) => {
     try {
       setUploadingFile(true)
-      let fileUrl: string
-      let fileName = file.name
-      let fileSize = file.size
-      try {
-        const upload = await fileUploadApi.uploadFile(file)
-        if (!upload.success || !upload.data) throw new Error('파일 업로드 실패')
-        fileUrl = upload.data.url
-        fileName = upload.data.originalFilename || file.name
-        fileSize = upload.data.fileSize || file.size
-      } catch {
-        // 파일 업로드 API가 실패하면 이미지 업로드 API로 올린다
-        const upload = await imageUploadApi.uploadImage(file)
-        if (!upload.success || !upload.data) throw new Error('파일 업로드 실패')
-        fileUrl = upload.data.url
-      }
-      await sendAttachment({ messageType: 'FILE', fileUrl, fileName, fileSize })
+      await sendAttachment({ messageType: 'FILE', ...(await uploadChatFile(file)) })
     } catch (error: any) {
       console.error('파일 업로드 실패:', error)
       alert(error.response?.data?.message || '파일 업로드에 실패했습니다.')

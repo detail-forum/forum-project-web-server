@@ -1,5 +1,22 @@
 'use client'
 
+import type { MessageActions } from '@/hooks/useMessageActions'
+
+/** 우클릭 메뉴와 반응 고르기 창. useMessageActions의 상태를 그린다. */
+export function MessageOverlays({ actions }: { actions: MessageActions }) {
+  return (
+    <>
+      {actions.contextMenu && <MessageContextMenu menu={actions.contextMenu} {...actions.menuHandlers} />}
+      {actions.reactingMessageId && (
+        <ReactionPicker
+          onPick={(emoji) => actions.toggleReaction(actions.reactingMessageId!, emoji)}
+          onClose={actions.closeReactionPicker}
+        />
+      )}
+    </>
+  )
+}
+
 export interface ContextMenuState {
   x: number
   y: number

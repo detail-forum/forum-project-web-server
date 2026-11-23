@@ -13,6 +13,7 @@ import LoginModal from '@/components/LoginModal'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
+import ReportButton from '@/components/ReportButton'
 
 export default function PostDetailPage() {
   const params = useParams()
@@ -745,6 +746,7 @@ export default function PostDetailPage() {
                       </svg>
                       <span>{post.likeCount || 0}</span>
                     </button>
+                    {isAuthenticated && !isOwner && <ReportButton targetType="POST" targetId={Number(params.id)} />}
                     {isOwner && (
                       <div className="flex space-x-2">
                         {post.groupId && (

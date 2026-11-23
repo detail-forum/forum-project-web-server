@@ -8,12 +8,13 @@ import type { RootState } from '@/store/store'
 import Header from '@/components/Header'
 import { adminApi, authApi } from '@/services/api'
 import { getErrorMessage } from '@/utils/errorHandler'
-import type { AdminComment, AdminPost, AdminStats, AdminUser, PageOf } from '@/types/api'
+import type { AdminComment, AdminPost, AdminReport, AdminStats, AdminUser, PageOf, ReportStatus } from '@/types/api'
 
-type Tab = 'overview' | 'users' | 'posts' | 'comments' | 'notice'
+type Tab = 'overview' | 'reports' | 'users' | 'posts' | 'comments' | 'notice'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: '개요' },
+  { id: 'reports', label: '신고' },
   { id: 'users', label: '사용자' },
   { id: 'posts', label: '게시글' },
   { id: 'comments', label: '댓글' },
@@ -45,7 +46,7 @@ export default function AdminPage() {
       <Header onLoginClick={() => router.push('/')} />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">서비스 관리</h1>
-        <p className="text-gray-500 mb-6">사용자, 게시글, 댓글을 관리하고 전체 공지를 보냅니다.</p>
+        <p className="text-gray-500 mb-6">신고를 처리하고 사용자, 게시글, 댓글을 관리하며 전체 공지를 보냅니다.</p>
 
         {isAdmin === null && <p className="text-gray-500">권한을 확인하는 중...</p>}
         {isAdmin === false && (
@@ -74,6 +75,7 @@ export default function AdminPage() {
               ))}
             </div>
             {tab === 'overview' && <Overview />}
+            {tab === 'reports' && <ReportsTab />}
             {tab === 'users' && <UsersTab />}
             {tab === 'posts' && <PostsTab />}
             {tab === 'comments' && <CommentsTab />}
@@ -100,6 +102,7 @@ function Overview() {
   if (!stats) return <p className="text-gray-500">불러오는 중...</p>
 
   const items = [
+    { label: '처리 대기 신고', value: stats.openReports },
     { label: '사용자', value: stats.users },
     { label: '정지된 사용자', value: stats.suspendedUsers },
     { label: '게시글', value: stats.posts },
@@ -400,6 +403,115 @@ function CommentsTab() {
             </td>
           </tr>
         ))}
+      </Table>
+      <Pager page={list.page} totalPages={list.data?.totalPages ?? 0} onChange={list.setPage} />
+    </section>
+  )
+}
+
+const REPORT_STATUS: { value: ReportStatus; label: string }[] = [
+  { value: 'OPEN', label: '대기' },
+  { value: 'RESOLVED', label: '삭제 처리됨' },
+  { value: 'DISMISSED', label: '문제없음' },
+]
+const TARGET_LABEL = { POST: '게시글', GROUP_POST: '모임 게시글', COMMENT: '댓글' } as const
+
+function ReportsTab() {
+  const [status, setStatus] = useState<ReportStatus>('OPEN')
+  const load = useCallback((_keyword: string, page: number) => adminApi.getReports(status, page), [status])
+  const list = usePagedList<AdminReport>(load)
+  const [actionError, setActionError] = useState('')
+
+  const handle = async (r: AdminReport, action: 'DELETE' | 'DISMISS') => {
+    const ask =
+      action === 'DELETE'
+        ? `이 ${TARGET_LABEL[r.targetType]}을(를) 삭제하고 쌓인 신고 ${r.openCount}건을 처리할까요?`
+        : `이 ${TARGET_LABEL[r.targetType]}에 쌓인 신고 ${r.openCount}건을 문제없음으로 닫을까요?`
+    if (!confirm(ask)) return
+    try {
+      setActionError('')
+      await adminApi.handleReport(r.id, action)
+      list.reload()
+    } catch (e) {
+      setActionError(getErrorMessage(e))
+    }
+  }
+
+  const targetUrl = (r: AdminReport) => {
+    if (r.groupPostId) return `/social-gathering/${r.groupId}/posts/${r.groupPostId}`
+    if (r.postId) return r.groupId && r.targetType === 'POST' ? `/social-gathering/${r.groupId}/posts/${r.postId}` : `/posts/${r.postId}`
+    return null
+  }
+
+  return (
+    <section>
+      <div className="inline-flex p-1 bg-gray-100 rounded-lg mb-4">
+        {REPORT_STATUS.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => {
+              setStatus(option.value)
+              list.setPage(0)
+            }}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              status === option.value ? 'bg-white text-gray-900 font-semibold shadow-sm' : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {(list.error || actionError) && <ErrorBox message={list.error || actionError} />}
+      <Table head={['대상', '사유', '신고자', '신고일', '']} empty={!list.data?.content.length}>
+        {list.data?.content.map((r) => {
+          const url = targetUrl(r)
+          return (
+            <tr key={r.id}>
+              <td className={`${td} max-w-sm`}>
+                <div className="text-xs text-gray-500 mb-0.5">
+                  {TARGET_LABEL[r.targetType]}
+                  {r.targetAuthor && ` · ${r.targetAuthor}`}
+                  {r.targetDeleted && <span className="ml-1 text-red-500">(삭제됨)</span>}
+                  {status === 'OPEN' && r.openCount > 1 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-semibold">신고 {r.openCount}건</span>
+                  )}
+                </div>
+                {url ? (
+                  <Link href={url} className="font-medium text-gray-900 hover:text-primary break-words" target="_blank">
+                    {r.targetTitle}
+                  </Link>
+                ) : (
+                  <span className="text-gray-500">{r.targetTitle}</span>
+                )}
+              </td>
+              <td className={`${td} max-w-xs`}>
+                <p className="whitespace-pre-wrap break-words">{r.reason}</p>
+              </td>
+              <td className={td}>{r.reporter}</td>
+              <td className={`${td} whitespace-nowrap`}>{formatDate(r.createdTime)}</td>
+              <td className={`${td} text-right whitespace-nowrap`}>
+                {r.status === 'OPEN' && (
+                  <div className="flex justify-end gap-2">
+                    {!r.targetDeleted && (
+                      <button
+                        onClick={() => handle(r, 'DELETE')}
+                        className="px-3 py-1 text-xs rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        삭제
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handle(r, 'DISMISS')}
+                      className="px-3 py-1 text-xs rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      문제없음
+                    </button>
+                  </div>
+                )}
+              </td>
+            </tr>
+          )
+        })}
       </Table>
       <Pager page={list.page} totalPages={list.data?.totalPages ?? 0} onChange={list.setPage} />
     </section>

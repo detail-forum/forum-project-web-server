@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { CommentDTO } from '@/types/api'
 import CommentForm from './CommentForm'
+import ReportButton from './ReportButton'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { commentApi } from '@/services/api'
@@ -267,6 +268,10 @@ export default function CommentItem({
                   <ReplyIcon />
                   <span className="text-sm">답글</span>
                 </button>
+              )}
+
+              {isAuthenticated && !isOwner && (
+                <ReportButton targetType="COMMENT" targetId={comment.id} className="px-2 py-1" />
               )}
 
               {/* 수정 버튼 - 로그인된 유저 중 자신의 댓글만 수정 가능 */}

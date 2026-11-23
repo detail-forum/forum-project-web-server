@@ -142,6 +142,27 @@ export interface AdminStats {
   groupPosts: number
   comments: number
   groups: number
+  openReports: number
+}
+
+export type ReportTargetType = 'POST' | 'GROUP_POST' | 'COMMENT'
+export type ReportStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED'
+
+export interface AdminReport {
+  id: number
+  targetType: ReportTargetType
+  targetId: number
+  targetTitle: string
+  targetAuthor: string | null
+  targetDeleted: boolean
+  postId: number | null
+  groupPostId: number | null
+  groupId: number | null
+  reason: string
+  reporter: string
+  status: ReportStatus
+  openCount: number
+  createdTime: string
 }
 
 export interface AdminUser {

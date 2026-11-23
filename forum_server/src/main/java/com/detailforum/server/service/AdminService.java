@@ -5,6 +5,7 @@ import com.detailforum.server.entity.Comment;
 import com.detailforum.server.entity.GroupPost;
 import com.detailforum.server.entity.Notification;
 import com.detailforum.server.entity.Post;
+import com.detailforum.server.entity.Report;
 import com.detailforum.server.entity.Users;
 import com.detailforum.server.exception.ResourceNotFoundException;
 import com.detailforum.server.repository.CommentRepository;
@@ -13,6 +14,7 @@ import com.detailforum.server.repository.GroupRepository;
 import com.detailforum.server.repository.NotificationRepository;
 import com.detailforum.server.repository.PostRepository;
 import com.detailforum.server.repository.RefreshTokenRepository;
+import com.detailforum.server.repository.ReportRepository;
 import com.detailforum.server.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +42,7 @@ public class AdminService {
     private final GroupRepository groupRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final NotificationRepository notificationRepository;
+    private final ReportRepository reportRepository;
 
     @Transactional(readOnly = true)
     public AdminDTO.Stats stats() {
@@ -49,7 +52,8 @@ public class AdminService {
                 postRepository.countByIsDeletedFalse(),
                 groupPostRepository.countByIsDeletedFalse(),
                 commentRepository.countByIsDeletedFalse(),
-                groupRepository.countByIsDeletedFalse());
+                groupRepository.countByIsDeletedFalse(),
+                reportRepository.countByStatus(Report.Status.OPEN));
     }
 
     @Transactional(readOnly = true)

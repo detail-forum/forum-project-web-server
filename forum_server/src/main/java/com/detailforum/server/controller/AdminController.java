@@ -2,7 +2,9 @@ package com.detailforum.server.controller;
 
 import com.detailforum.server.dto.AdminDTO;
 import com.detailforum.server.dto.ApiResponse;
+import com.detailforum.server.entity.Report;
 import com.detailforum.server.service.AdminService;
+import com.detailforum.server.service.ReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class AdminController {
 
     private final AdminService adminService;
+    private final ReportService reportService;
 
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<AdminDTO.Stats>> stats() {
@@ -68,6 +71,23 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Void>> deleteComment(@PathVariable Long id, Authentication authentication) {
         adminService.deleteComment(authentication.getName(), id);
         return ResponseEntity.ok(ApiResponse.ok("댓글을 삭제했습니다."));
+    }
+
+    @GetMapping("/reports")
+    public ResponseEntity<ApiResponse<Page<AdminDTO.Report>>> reports(
+            @RequestParam(defaultValue = "OPEN") Report.Status status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok(reportService.list(status, page, size), "조회 성공"));
+    }
+
+    @PatchMapping("/reports/{id}")
+    public ResponseEntity<ApiResponse<Integer>> handleReport(@PathVariable Long id,
+                                                             @Valid @RequestBody AdminDTO.ReportActionRequest request,
+                                                             Authentication authentication) {
+        int closed = reportService.handle(authentication.getName(), id, request.action());
+        String done = request.action() == AdminDTO.ReportActionRequest.Action.DELETE ? "대상을 삭제하고" : "문제없음으로";
+        return ResponseEntity.ok(ApiResponse.ok(closed, done + " 신고 " + closed + "건을 처리했습니다."));
     }
 
     @PostMapping("/notices")

@@ -4,6 +4,21 @@ import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import type { GroupChatMessageDTO } from '@/types/api'
 
+/** 그룹·1대1 메시지가 함께 쓰는 모양. 1대1에는 답장, 반응, 관리자 표시가 없다. */
+export type ChatMessageView = Pick<
+  GroupChatMessageDTO,
+  'id' | 'username' | 'nickname' | 'message' | 'createdTime' | 'profileImageUrl' | 'fileUrl' | 'fileName' | 'fileSize'
+> &
+  Partial<
+    Pick<GroupChatMessageDTO, 'displayName' | 'isAdmin' | 'replyToMessageId' | 'replyToMessage' | 'reactions' | 'myReactions' | 'messageType'>
+  >
+
+/** 그룹 채팅 읽음 표시: 나를 뺀 멤버 중 아직 읽지 않은 수 */
+export const groupReadLabel = (memberCount: number, readCount?: number) => {
+  const unread = Math.max(0, memberCount - (readCount || 0) - 1)
+  return unread > 0 ? `읽음 ${unread}` : ''
+}
+
 export interface MessageEditing {
   messageId: number | null
   text: string
@@ -13,13 +28,14 @@ export interface MessageEditing {
 }
 
 interface Props {
-  message: GroupChatMessageDTO
+  message: ChatMessageView
   isMine: boolean
   isNewest: boolean
-  memberCount?: number
-  editing: MessageEditing
-  onContextMenu: (e: React.MouseEvent, messageId: number) => void
-  onToggleReaction: (messageId: number, emoji: string) => void
+  /** 내 메시지 옆 읽음 표시. undefined면 자리도 만들지 않는다 */
+  readLabel?: string
+  editing?: MessageEditing
+  onContextMenu?: (e: React.MouseEvent, messageId: number) => void
+  onToggleReaction?: (messageId: number, emoji: string) => void
 }
 
 /** 화면의 메시지 요소로 스크롤하고 2초간 강조한다. 답장 원문, 검색 결과에서 쓴다. */
@@ -32,12 +48,12 @@ export function scrollToMessage(messageId: number) {
 }
 
 /** 채팅 메시지 한 개: 작성자, 답장 원문, 본문(텍스트·이미지·파일), 반응, 읽음 수 */
-export default function MessageItem({ message, isMine, isNewest, memberCount, editing, onContextMenu, onToggleReaction }: Props) {
+export default function MessageItem({ message, isMine, isNewest, readLabel, editing, onContextMenu, onToggleReaction }: Props) {
   return (
     <div
       data-message-id={message.id}
       className={`flex gap-3 ${isMine ? 'flex-row-reverse' : ''} ${isNewest ? 'animate-slide-in' : ''}`}
-      onContextMenu={(e) => onContextMenu(e, message.id)}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(e, message.id) : undefined}
     >
       <div className="flex-shrink-0">
         {message.profileImageUrl ? (
@@ -63,7 +79,7 @@ export default function MessageItem({ message, isMine, isNewest, memberCount, ed
           <span className="text-xs text-gray-500">{format(new Date(message.createdTime), 'HH:mm', { locale: ko })}</span>
         </div>
         <div className={`flex items-end gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
-          {editing.messageId === message.id ? (
+          {editing && editing.messageId === message.id ? (
             <div className="flex-1">
               <input
                 type="text"
@@ -109,7 +125,7 @@ export default function MessageItem({ message, isMine, isNewest, memberCount, ed
                       {message.reactions.map((reaction, idx) => (
                         <button
                           key={idx}
-                          onClick={() => onToggleReaction(message.id, reaction.emoji)}
+                          onClick={() => onToggleReaction?.(message.id, reaction.emoji)}
                           className={`px-2 py-1 rounded-full text-xs hover:bg-opacity-30 transition ${
                             message.myReactions?.includes(reaction.emoji) ? 'bg-blue-500 bg-opacity-30' : 'bg-black bg-opacity-20'
                           }`}
@@ -121,14 +137,8 @@ export default function MessageItem({ message, isMine, isNewest, memberCount, ed
                   )}
                 </div>
               </div>
-              {/* 읽음 표시: 나를 뺀 멤버 중 아직 읽지 않은 수 */}
-              {isMine && memberCount && (
-                <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">
-                  {(() => {
-                    const unreadCount = Math.max(0, memberCount - (message.readCount || 0) - 1)
-                    return unreadCount > 0 ? `읽음 ${unreadCount}` : ''
-                  })()}
-                </span>
+              {readLabel !== undefined && (
+                <span className="text-xs text-gray-400 whitespace-nowrap self-end pb-8">{readLabel}</span>
               )}
             </>
           )}
@@ -138,7 +148,7 @@ export default function MessageItem({ message, isMine, isNewest, memberCount, ed
   )
 }
 
-function ReplyQuote({ message, isMine }: { message: GroupChatMessageDTO; isMine: boolean }) {
+function ReplyQuote({ message, isMine }: { message: ChatMessageView; isMine: boolean }) {
   const reply = message.replyToMessage!
   const name = reply.displayName || reply.nickname
   return (
@@ -167,7 +177,7 @@ function ReplyQuote({ message, isMine }: { message: GroupChatMessageDTO; isMine:
   )
 }
 
-function MessageBody({ message, isMine }: { message: GroupChatMessageDTO; isMine: boolean }) {
+function MessageBody({ message, isMine }: { message: ChatMessageView; isMine: boolean }) {
   if (message.messageType === 'IMAGE' && message.fileUrl) {
     return (
       <img

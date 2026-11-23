@@ -5,18 +5,20 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/store/store'
 import { groupApi } from '@/services/api'
-import type { GroupChatMessageDTO, GroupChatRoomDTO, GroupDetailDTO, GroupMemberDTO } from '@/types/api'
+import type { GroupChatRoomDTO, GroupDetailDTO, GroupMemberDTO } from '@/types/api'
 import Header from '@/components/Header'
 import LoginModal from '@/components/LoginModal'
 import GifPicker from '@/components/GifPicker'
 import { getUsernameFromToken } from '@/utils/jwt'
 import { useGroupChatMessages } from '@/hooks/useGroupChatMessages'
 import { useChatScroll } from '@/hooks/useChatScroll'
+import { useMessageActions } from '@/hooks/useMessageActions'
 import ChatRoomList from '@/components/chat/ChatRoomList'
 import ChatRoomHeader from '@/components/chat/ChatRoomHeader'
 import MessageList from '@/components/chat/MessageList'
+import { groupReadLabel } from '@/components/chat/MessageItem'
 import MessageComposer from '@/components/chat/MessageComposer'
-import { MessageContextMenu, ReactionPicker, type ContextMenuState } from '@/components/chat/MessageMenus'
+import { MessageOverlays } from '@/components/chat/MessageMenus'
 import ChatSearchSidebar from '@/components/chat/ChatSearchSidebar'
 import MembersSidebar from '@/components/chat/MembersSidebar'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
@@ -40,11 +42,6 @@ export default function ChatRoomPage() {
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false)
   const [showGifPicker, setShowGifPicker] = useState(false)
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
-  const [reactingMessageId, setReactingMessageId] = useState<number | null>(null)
-  const [editingMessageId, setEditingMessageId] = useState<number | null>(null)
-  const [editMessageText, setEditMessageText] = useState('')
-  const [replyingTo, setReplyingTo] = useState<GroupChatMessageDTO | null>(null)
 
   const fetchGroupDetail = useCallback(async () => {
     try {
@@ -101,41 +98,12 @@ export default function ChatRoomPage() {
   const scroll = useChatScroll(chat.messages, !chat.loading)
   scrollRef.current = scroll
 
-  // 우클릭 메뉴는 바깥 아무 곳이나 누르면 닫는다
-  useEffect(() => {
-    if (!contextMenu) return
-    const close = () => setContextMenu(null)
-    window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
-  }, [contextMenu])
-
-  const findMessage = (id: number) => chat.messages.find((m) => m.id === id)
-
-  const handleContextMenu = (e: React.MouseEvent, messageId: number) => {
-    e.preventDefault()
-    const message = findMessage(messageId)
-    if (!message) return
-    setContextMenu({ x: e.clientX, y: e.clientY, messageId, isMyMessage: message.username === currentUsername })
-  }
+  const actions = useMessageActions(chat, currentUsername)
 
   const handleSend = async (text: string) => {
-    const sent = await chat.send(text, replyingTo)
-    if (sent) setReplyingTo(null)
+    const sent = await chat.send(text, actions.replyingTo)
+    if (sent) actions.setReplyingTo(null)
     return sent
-  }
-
-  const handleSaveEdit = (messageId: number) => {
-    if (!editMessageText.trim()) return
-    chat.editMessageLocally(messageId, editMessageText)
-    setEditingMessageId(null)
-    setEditMessageText('')
-  }
-
-  const handleToggleReaction = async (messageId: number, emoji: string) => {
-    if (await chat.toggleReaction(messageId, emoji)) {
-      setReactingMessageId(null)
-      setContextMenu(null)
-    }
   }
 
   const handleGifSelect = (gifUrl: string) => {
@@ -194,55 +162,17 @@ export default function ChatRoomPage() {
                 endRef={scroll.endRef}
                 messages={chat.messages}
                 currentUsername={currentUsername}
-                memberCount={group?.memberCount}
+                readLabelOf={(m, isMine) =>
+                  isMine && group?.memberCount ? groupReadLabel(group.memberCount, m.readCount) : undefined
+                }
                 typingUsers={chat.typingUsers}
-                isConnected={chat.isConnected}
-                editing={{
-                  messageId: editingMessageId,
-                  text: editMessageText,
-                  setText: setEditMessageText,
-                  onSave: handleSaveEdit,
-                  onCancel: () => {
-                    setEditingMessageId(null)
-                    setEditMessageText('')
-                  },
-                }}
-                onContextMenu={handleContextMenu}
-                onToggleReaction={handleToggleReaction}
+                showConnectionWarning={!chat.isConnected}
+                editing={actions.editing}
+                onContextMenu={actions.onContextMenu}
+                onToggleReaction={actions.toggleReaction}
               />
 
-              {contextMenu && (
-                <MessageContextMenu
-                  menu={contextMenu}
-                  onReact={(id) => {
-                    setReactingMessageId(id)
-                    setContextMenu(null)
-                  }}
-                  onEdit={(id) => {
-                    const message = findMessage(id)
-                    if (!message) return
-                    setEditingMessageId(id)
-                    setEditMessageText(message.message)
-                    setContextMenu(null)
-                  }}
-                  onReply={(id) => {
-                    const message = findMessage(id)
-                    if (!message) return
-                    setReplyingTo(message)
-                    setContextMenu(null)
-                  }}
-                  onDelete={async (id) => {
-                    if (await chat.deleteMessage(id)) setContextMenu(null)
-                  }}
-                />
-              )}
-
-              {reactingMessageId && (
-                <ReactionPicker
-                  onPick={(emoji) => handleToggleReaction(reactingMessageId, emoji)}
-                  onClose={() => setReactingMessageId(null)}
-                />
-              )}
+              <MessageOverlays actions={actions} />
 
               <MessageComposer
                 isAuthenticated={isAuthenticated}
@@ -250,8 +180,8 @@ export default function ChatRoomPage() {
                 sending={chat.sending}
                 uploadingImage={chat.uploadingImage}
                 uploadingFile={chat.uploadingFile}
-                replyingTo={replyingTo}
-                onCancelReply={() => setReplyingTo(null)}
+                replyingTo={actions.replyingTo}
+                onCancelReply={() => actions.setReplyingTo(null)}
                 onSend={handleSend}
                 onRequireLogin={() => setShowLoginModal(true)}
                 onStartTyping={chat.startTyping}

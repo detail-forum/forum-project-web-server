@@ -18,7 +18,12 @@ interface Props {
   onStopTyping: () => void
   onPickImage: (file: File) => void
   onPickFile: (file: File) => void
-  onOpenGif: () => void
+  /** 없으면 첨부 메뉴에 GIF가 없다 */
+  onOpenGif?: () => void
+  /** true면 웹소켓이 끊겼을 때 입력을 막는다 (REST로 보낼 수 없는 곳) */
+  requireConnection?: boolean
+  /** 값이 바뀌면 입력창에 포커스한다 (예: 채팅방 전환) */
+  focusKey?: unknown
 }
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -40,6 +45,8 @@ export default function MessageComposer({
   onPickImage,
   onPickFile,
   onOpenGif,
+  requireConnection = true,
+  focusKey,
 }: Props) {
   const [text, setText] = useState('')
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false)
@@ -56,6 +63,10 @@ export default function MessageComposer({
     const t = setTimeout(() => inputRef.current?.focus(), 100)
     return () => clearTimeout(t)
   }, [replyingTo])
+
+  useEffect(() => {
+    if (focusKey !== undefined) requestAnimationFrame(() => inputRef.current?.focus())
+  }, [focusKey])
 
   // 첨부 메뉴 바깥을 누르면 닫는다
   useEffect(() => {
@@ -88,18 +99,19 @@ export default function MessageComposer({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const submit = async () => {
     if (!isAuthenticated) {
       onRequireLogin()
       return
     }
-    if (!text.trim()) return
+    if (sending || !text.trim()) return
     if (await onSend(text)) {
       setText('')
       onStopTyping()
       clearTypingTimer()
     }
+    // 보낸 뒤에도 바로 이어서 칠 수 있게
+    requestAnimationFrame(() => inputRef.current?.focus())
   }
 
   const pick = (max: number, tooBig: string, onPick: (file: File) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,7 +130,12 @@ export default function MessageComposer({
     'w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 disabled:opacity-50'
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-white">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        submit()
+      }}
+      className="border-t border-gray-200 p-4 bg-white">
       {replyingTo && (
         <div className="mb-2 p-2 bg-gray-100 rounded-lg flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -175,21 +192,23 @@ export default function MessageComposer({
                 </svg>
                 {uploadingFile ? '업로드 중...' : '파일'}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenGif()
-                  setShowAttachmentMenu(false)
-                }}
-                disabled={sending}
-                className={menuItemClass}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                GIF
-              </button>
+              {onOpenGif && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenGif()
+                    setShowAttachmentMenu(false)
+                  }}
+                  disabled={sending}
+                  className={menuItemClass}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  GIF
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -211,9 +230,17 @@ export default function MessageComposer({
           type="text"
           value={text}
           onChange={handleChange}
+          onKeyDown={(e) => {
+            // 한글 조합 중 Enter는 글자 확정용이다. 이때 보내면 마지막 글자가 따로 한 번 더 간다.
+            if (e.nativeEvent.isComposing) return
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
           placeholder={replyingTo ? `@${replyingTo.nickname}에게 답장...` : '메시지를 입력하세요...'}
           className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          disabled={sending || !isAuthenticated || !isConnected || busy}
+          disabled={sending || !isAuthenticated || (requireConnection && !isConnected) || busy}
         />
         <button
           type="submit"

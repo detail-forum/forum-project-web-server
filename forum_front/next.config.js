@@ -33,7 +33,7 @@ const nextConfig = {
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       // Pretendard 웹폰트(app/layout.tsx)를 jsDelivr에서 받는다.
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-      "img-src 'self' data: blob: https://*.giphy.com",
+      "img-src 'self' data: blob: https://*.giphy.com https://forum.rjsgud.com",
       "connect-src 'self' https://api.giphy.com https://forum.rjsgud.com wss://forum.rjsgud.com",
       "font-src 'self' data: https://cdn.jsdelivr.net",
       "frame-ancestors 'none'",

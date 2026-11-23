@@ -109,7 +109,7 @@ forum-project/
 │   ├── src/
 │   │   ├── main/
 │   │   │   ├── java/
-│   │   │   │   └── com/pgh/api_practice/
+│   │   │   │   └── com/detailforum/server/
 │   │   │   │       ├── controller/    # REST API 컨트롤러
 │   │   │   │       ├── service/       # 비즈니스 로직
 │   │   │   │       ├── repository/    # 데이터 접근 계층
@@ -237,7 +237,7 @@ http://localhost:8081/swagger-ui.html
 ```bash
 cd forum_server
 ./gradlew clean build
-java -jar build/libs/api_practice-0.0.1-SNAPSHOT.jar
+java -jar build/libs/forum_server-0.0.1-SNAPSHOT.jar
 ```
 
 #### 프론트엔드

@@ -192,21 +192,21 @@ app.base-url=https://forum.rjsgud.com
 
 ### 백엔드
 
-1. `forum_server/src/main/java/com/pgh/api_practice/entity/Users.java`
+1. `forum_server/src/main/java/com/detailforum/server/entity/Users.java`
    - `emailVerified`, `emailVerificationToken` 필드 추가
 
-2. `forum_server/src/main/java/com/pgh/api_practice/repository/AuthRepository.java`
+2. `forum_server/src/main/java/com/detailforum/server/repository/AuthRepository.java`
    - `findByEmail()`, `findByEmailVerificationToken()` 메서드 추가
 
-3. `forum_server/src/main/java/com/pgh/api_practice/service/AuthService.java`
+3. `forum_server/src/main/java/com/detailforum/server/service/AuthService.java`
    - 회원가입 시 이메일 인증 토큰 생성 및 발송
    - 로그인 시 이메일 인증 여부 확인
    - `verifyEmail()`, `resendVerificationEmail()` 메서드 추가
 
-4. `forum_server/src/main/java/com/pgh/api_practice/service/EmailService.java` (신규)
+4. `forum_server/src/main/java/com/detailforum/server/service/EmailService.java` (신규)
    - 이메일 발송 서비스
 
-5. `forum_server/src/main/java/com/pgh/api_practice/controller/AuthController.java`
+5. `forum_server/src/main/java/com/detailforum/server/controller/AuthController.java`
    - `/auth/verify-email` 엔드포인트 추가
    - `/auth/resend-verification` 엔드포인트 추가
 

@@ -25,8 +25,6 @@ const nextConfig = {
       },
     ];
   },
-  // 보안 응답 헤더 (ZAP 경고 대응). CSP는 앱이 실제 쓰는 출처만 허용.
-  // shortcut: script/style에 'unsafe-inline' 허용 — Next.js 인라인 스크립트 때문. nonce 방식으로 좁히려면 미들웨어 필요.
   // 예전 모임 주소(/social/{id}/...)는 /social-gathering 으로 옮겨졌다. /social 자체는 다른 페이지다.
   async redirects() {
     return [
@@ -34,14 +32,18 @@ const nextConfig = {
       { source: '/social/:groupId(\\d+)/:path*', destination: '/social-gathering/:groupId/:path*', permanent: true },
     ]
   },
+  // 보안 응답 헤더 (ZAP 경고 대응). CSP는 앱이 실제 쓰는 출처만 허용.
+  // shortcut: script/style에 'unsafe-inline' 허용 — Next.js 인라인 스크립트 때문. nonce 방식으로 좁히려면 미들웨어 필요.
   async headers() {
+    // API 서버 출처. 로컬 백엔드(NEXT_PUBLIC_API_URL=http://localhost:8081)로 개발할 때도 CSP에 막히지 않게 한다.
+    const apiOrigin = new URL(process.env.NEXT_PUBLIC_API_URL || 'https://forum.rjsgud.com/api').origin
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       // Pretendard 웹폰트(app/layout.tsx)를 jsDelivr에서 받는다.
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
       "img-src 'self' data: blob: https://*.giphy.com https://forum.rjsgud.com",
-      "connect-src 'self' https://api.giphy.com https://forum.rjsgud.com wss://forum.rjsgud.com",
+      `connect-src 'self' https://api.giphy.com https://forum.rjsgud.com wss://forum.rjsgud.com ${apiOrigin} ${apiOrigin.replace(/^http/, 'ws')}`,
       "font-src 'self' data: https://cdn.jsdelivr.net",
       "frame-ancestors 'none'",
       "base-uri 'self'",

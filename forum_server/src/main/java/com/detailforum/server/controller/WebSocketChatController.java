@@ -145,8 +145,8 @@ public class WebSocketChatController {
             @Payload DirectChatMessageRequest request,
             Principal principal
     ) {
+        // 프론트는 {message}만 보낸다. type 검사를 두면 모든 메시지가 조용히 버려진다.
         if (principal == null) return;
-        if (!"MESSAGE".equals(request.getType())) return;
 
         directChatService.sendMessageViaWebSocket(
                 roomId,

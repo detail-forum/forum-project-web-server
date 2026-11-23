@@ -59,6 +59,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/ws/**", "/ws").permitAll() // WebSocket 엔드포인트 허용
                         .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/reports/**").authenticated()
                         .anyRequest().permitAll()
                 );
 

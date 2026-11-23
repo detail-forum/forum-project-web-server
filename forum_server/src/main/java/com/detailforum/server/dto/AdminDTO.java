@@ -13,7 +13,24 @@ public final class AdminDTO {
     private AdminDTO() {
     }
 
-    public record Stats(long users, long suspendedUsers, long posts, long groupPosts, long comments, long groups) {
+    public record Stats(long users, long suspendedUsers, long posts, long groupPosts, long comments, long groups,
+                        long openReports) {
+    }
+
+    /**
+     * 신고 한 건과 신고 대상 요약. 화면 이동용으로 postId, groupPostId, groupId 중 필요한 것만 채운다.
+     * openCount는 같은 대상에 쌓인 미처리 신고 수다.
+     */
+    public record Report(Long id, com.detailforum.server.entity.Report.TargetType targetType, Long targetId,
+                         String targetTitle, String targetAuthor, boolean targetDeleted,
+                         Long postId, Long groupPostId, Long groupId,
+                         String reason, String reporter, com.detailforum.server.entity.Report.Status status,
+                         long openCount, LocalDateTime createdTime) {
+    }
+
+    /** DELETE: 대상을 지우고 신고를 처리 완료로, DISMISS: 대상은 두고 신고만 닫는다. */
+    public record ReportActionRequest(@NotNull Action action) {
+        public enum Action { DELETE, DISMISS }
     }
 
     public record User(Long id, String username, String nickname, String email, Users.Role role,

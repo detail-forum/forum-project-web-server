@@ -10,6 +10,7 @@ import type { GroupPostDetailDTO, PostDetailDTO } from '@/types/api'
 import Header from '@/components/Header'
 import CommentList from '@/components/CommentList'
 import LoginModal from '@/components/LoginModal'
+import ReportButton from '@/components/ReportButton'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
@@ -553,6 +554,9 @@ export default function GroupPostDetailPage() {
                     </svg>
                     <span>{likeCount || 0}</span>
                   </button>
+                  {isAuthenticated && !isOwner && (
+                    <ReportButton targetType={isGroupPost ? 'GROUP_POST' : 'POST'} targetId={postId} />
+                  )}
                   {isOwner && (
                     <div className="flex space-x-2">
                       {post.canEdit && (

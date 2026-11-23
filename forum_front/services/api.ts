@@ -17,6 +17,9 @@ import type {
   AdminUser,
   AdminPost,
   AdminComment,
+  AdminReport,
+  ReportStatus,
+  ReportTargetType,
   PageOf,
 } from '@/types/api'
 import { cache } from '@/utils/cache'
@@ -847,4 +850,18 @@ export const adminApi = {
 
   sendNotice: async (title: string, message: string): Promise<ApiResponse<number>> =>
     (await apiClient.post<ApiResponse<number>>('/admin/notices', { title, message })).data,
+
+  getReports: async (status: ReportStatus = 'OPEN', page = 0, size = 20): Promise<ApiResponse<PageOf<AdminReport>>> =>
+    (await apiClient.get<ApiResponse<PageOf<AdminReport>>>('/admin/reports', { params: { status, page, size } })).data,
+
+  handleReport: async (id: number, action: 'DELETE' | 'DISMISS'): Promise<ApiResponse<number>> => {
+    const response = await apiClient.patch<ApiResponse<number>>(`/admin/reports/${id}`, { action })
+    if (action === 'DELETE') cache.clear()
+    return response.data
+  },
+}
+
+export const reportApi = {
+  create: async (targetType: ReportTargetType, targetId: number, reason: string): Promise<ApiResponse<void>> =>
+    (await apiClient.post<ApiResponse<void>>('/reports', { targetType, targetId, reason })).data,
 }

@@ -407,8 +407,8 @@ public class DirectChatService {
         dto.setMessageType(CreateDirectMessageDTO.MessageType.TEXT);
         dto.setMessage(messageText);
 
-        DirectChatMessage saved = createAndSaveMessage(room, me, dto);
-        return toMessageDTOForSend(saved, me.getId());
+        // 저장만 하고 끝내면 상대도 나도 받지 못한다. 구독자에게 보내야 화면에 뜬다.
+        return sendAndBroadcast(room, me, dto);
     }
 
     /** 일반 채팅 메시지 읽음 처리 */

@@ -9,7 +9,6 @@ import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,21 +21,17 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class GroupPostService {
 
+    private final CurrentUser currentUser;
     private final GroupPostRepository groupPostRepository;
     private final GroupRepository groupRepository;
     private final GroupMemberRepository groupMemberRepository;
-    private final UserRepository userRepository;
     private final PostLikeRepository postLikeRepository;
     private final TagRepository tagRepository;
     private final GroupPostTagRepository groupPostTagRepository;
 
     /** 현재 사용자 가져오기 */
     private Users getCurrentUser() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
-            return null;
-        }
-        return userRepository.findByUsername(authentication.getName()).orElse(null);
+        return currentUser.find().orElse(null);
     }
 
     /** 모임 활동 게시물 생성 */

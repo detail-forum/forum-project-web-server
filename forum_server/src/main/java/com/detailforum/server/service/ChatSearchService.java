@@ -7,7 +7,6 @@ import com.detailforum.server.exception.ResourceNotFoundException;
 import com.detailforum.server.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ChatSearchService {
 
+    private final CurrentUser currentUser;
     private final GroupChatMessageRepository groupChatMessageRepository;
     private final GroupChatRoomRepository groupChatRoomRepository;
     private final GroupMemberRepository groupMemberRepository;
@@ -111,11 +111,6 @@ public class ChatSearchService {
     }
 
     private Users getCurrentUser() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getName() == null || "anonymousUser".equals(auth.getName())) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
-        }
-        return userRepository.findByUsername(auth.getName())
-                .orElseThrow(() -> new ApplicationUnauthorizedException("사용자를 찾을 수 없습니다."));
+        return currentUser.require();
     }
 }

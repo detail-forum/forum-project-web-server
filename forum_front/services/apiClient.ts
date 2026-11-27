@@ -1,0 +1,251 @@
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import type {
+  ApiResponse,
+  LoginResponse,
+  RefreshTokenRequest,
+} from '@/types/api'
+import { store } from '@/store/store'
+import { updateTokens, logout } from '@/store/slices/authSlice'
+import { removeCookie } from '@/utils/cookies'
+import { isTokenExpired } from '@/utils/jwt'
+
+// 프로덕션: HTTPS 도메인 사용
+// 개발 환경에서는 환경 변수로 localhost:8081 사용 가능
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://forum.rjsgud.com/api'
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 10000, // 10초 타임아웃
+  withCredentials: true, // 쿠키를 포함하여 요청 전송
+})
+
+// 요청 인터셉터: 토큰 자동 추가
+apiClient.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      // Redux store에서 토큰 확인
+      // 서버가 HttpOnly 쿠키로도 토큰을 설정하지만, Authorization 헤더도 함께 보냄 (이중 보안)
+      const state = store.getState()
+      const token = state.auth.accessToken
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// 토큰 재발급 플래그 (무한 루프 방지)
+let isRefreshing = false
+let failedQueue: Array<{
+  resolve: (value?: any) => void
+  reject: (error?: any) => void
+}> = []
+
+const processQueue = (error: AxiosError | null, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
+// 응답 인터셉터: 에러 처리 및 토큰 자동 재발급
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+
+    // 에러 상세 정보 로깅
+    if (error.response) {
+      console.error('API Error:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        data: error.response.data,
+      })
+    } else if (error.request) {
+      console.error('Network Error:', error.request)
+    } else {
+      console.error('Error:', error.message)
+    }
+
+    // 인증 확인 API는 인터셉터에서 제외 (무한 루프 방지)
+    const isAuthCheckEndpoint = originalRequest?.url?.includes('/auth/verify') || 
+                                 originalRequest?.url?.includes('/auth/me')
+
+    // 401 또는 403 에러 처리 - 토큰 재발급 시도 (403도 인증 문제일 수 있음)
+    if ((error.response?.status === 401 || error.response?.status === 403) && 
+        typeof window !== 'undefined' && 
+        originalRequest && 
+        !originalRequest._retry &&
+        !isAuthCheckEndpoint) { // 인증 확인 API는 제외
+      if (isRefreshing) {
+        // 이미 재발급 중이면 대기열에 추가
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        })
+          .then((token) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`
+            }
+            return apiClient(originalRequest)
+          })
+          .catch((err) => {
+            return Promise.reject(err)
+          })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      // Redux store에서 refreshToken 가져오기 (HttpOnly 쿠키는 JavaScript에서 읽을 수 없음)
+      const state = store.getState()
+      const refreshToken = state.auth.refreshToken
+
+      // RefreshToken이 없으면 재발급 요청을 보내지 않고 바로 로그아웃
+      if (!refreshToken) {
+        console.warn('RefreshToken이 없습니다. 로그인이 필요합니다.')
+        processQueue(error)
+        isRefreshing = false
+        removeCookie('accessToken')
+        removeCookie('refreshToken')
+        store.dispatch(logout())
+
+        // 사용자에게 명확한 메시지 표시
+        let errorMessage = '로그인이 필요합니다.'
+        if (
+          error.response &&
+          error.response.data &&
+          typeof (error.response.data as any).message === 'string'
+        ) {
+          errorMessage = (error.response.data as any).message
+        }
+        console.warn('인증 실패:', errorMessage)
+
+        // 인증 확인 API가 아닌 경우에만 리다이렉트 (무한 루프 방지)
+        // 현재 경로가 홈이 아닌 경우에만 리다이렉트
+        if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+          window.location.href = '/'
+        }
+        return Promise.reject(error)
+      }
+      
+      // RefreshToken이 만료되었는지 확인 (만료되었으면 재발급 요청을 보내지 않음)
+      if (isTokenExpired(refreshToken)) {
+        console.warn('RefreshToken이 만료되었습니다. 다시 로그인해주세요.')
+        processQueue(error)
+        isRefreshing = false
+        removeCookie('accessToken')
+        removeCookie('refreshToken')
+        store.dispatch(logout())
+        
+        // 현재 경로가 홈이 아닌 경우에만 리다이렉트 (무한 루프 방지)
+        if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+          window.location.href = '/'
+        }
+        return Promise.reject(error)
+      }
+
+      try {
+        // RefreshToken으로 새 AccessToken 발급
+        // refreshToken이 반드시 있어야 하므로 명시적으로 체크
+        if (!refreshToken) {
+          throw new Error('RefreshToken이 없습니다.')
+        }
+
+        // 서버가 쿠키에서 refreshToken을 읽을 수 있지만, 호환성을 위해 body에도 포함
+        const response = await axios.post<ApiResponse<LoginResponse>>(
+          `${API_BASE_URL}/auth/refresh`,
+          { refreshToken } as RefreshTokenRequest,
+          { withCredentials: true }
+        )
+
+        if (response.data.success && response.data.data) {
+          const { accessToken, refreshToken: newRefreshToken } = response.data.data
+
+          // 서버가 HttpOnly 쿠키로 자동 설정하므로, 클라이언트는 Redux store만 업데이트
+          // Redux 상태 업데이트 (UI 상태 관리용)
+          store.dispatch(updateTokens({ accessToken, refreshToken: newRefreshToken }))
+
+          // 대기 중인 요청들 처리
+          processQueue(null, accessToken)
+
+          // 원래 요청 재시도 (새 토큰을 명시적으로 설정)
+          // 요청 인터셉터가 실행되기 전에 토큰을 설정하여 확실하게 적용
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`
+          }
+          
+          // Redux 업데이트가 완료될 시간을 주기 위해 약간의 지연
+          // 하지만 동기적으로 처리하기 위해 Promise.resolve() 사용
+          isRefreshing = false
+          
+          // 새로운 요청 객체를 생성하여 토큰이 확실히 적용되도록 함
+          const retryRequest = {
+            ...originalRequest,
+            headers: {
+              ...originalRequest.headers,
+              Authorization: `Bearer ${accessToken}`
+            }
+          }
+          
+          return apiClient(retryRequest)
+        } else {
+          throw new Error('토큰 재발급 실패')
+        }
+      } catch (refreshError: any) {
+        // RefreshToken도 만료되었거나 유효하지 않음 (403, 401 등)
+        processQueue(refreshError as AxiosError)
+        isRefreshing = false
+        removeCookie('accessToken')
+        removeCookie('refreshToken')
+        store.dispatch(logout())
+        
+        // 사용자에게 명확한 메시지 표시
+        const errorMessage = refreshError?.response?.data?.message || 
+                            refreshError?.message || 
+                            '세션이 만료되었습니다. 다시 로그인해주세요.'
+        
+        console.warn('토큰 재발급 실패:', {
+          status: refreshError?.response?.status,
+          statusText: refreshError?.response?.statusText,
+          message: errorMessage,
+          url: refreshError?.config?.url
+        })
+        
+        // 403 또는 401 에러인 경우 명확히 로그인 필요 메시지 표시
+        if (refreshError?.response?.status === 403 || refreshError?.response?.status === 401) {
+          console.warn('토큰 재발급이 거부되었습니다. 다시 로그인해주세요.')
+        }
+        
+        // 사용자에게 알림 표시 (페이지 이동 전에 표시)
+        if (typeof window !== 'undefined') {
+          // 짧은 지연 후 alert 표시 (페이지 이동 전에 보이도록)
+          setTimeout(() => {
+            alert(errorMessage)
+          }, 100)
+          
+          // 현재 경로가 홈이 아닌 경우에만 리다이렉트 (무한 루프 방지)
+          if (window.location.pathname !== '/') {
+            window.location.href = '/'
+          }
+        }
+        
+        return Promise.reject(refreshError)
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
+  

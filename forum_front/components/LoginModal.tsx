@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { useDispatch } from 'react-redux'
+import { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import type { RootState } from '@/store/store'
 import { setCredentials } from '@/store/slices/authSlice'
 import { authApi } from '@/services/api'
 import { useRouter } from 'next/navigation'
@@ -28,6 +29,12 @@ export default function LoginModal({ isOpen = true, onClose, onLoginSuccess }: L
   const [resendSuccess, setResendSuccess] = useState(false)
   const dispatch = useDispatch()
   const router = useRouter()
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
+
+  // 새로고침 직후에는 세션 복원(AuthInitializer) 전이라 비로그인으로 보여 페이지가 모달을 연다. 복원되면 닫는다.
+  useEffect(() => {
+    if (isOpen && isAuthenticated) onClose()
+  }, [isOpen, isAuthenticated, onClose])
 
   if (!isOpen) return null
 

@@ -1,0 +1,56 @@
+# e2e 전용 백엔드: MySQL + 메일 수신함(Mailpit) + 이 저장소의 Spring 서버.
+# Playwright의 globalSetup이 띄우고 globalTeardown이 지운다. DB는 tmpfs라 매번 빈 상태로 시작한다.
+name: forum-e2e
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: e2e-root
+      MYSQL_DATABASE: forum
+      MYSQL_USER: forum
+      MYSQL_PASSWORD: forum-e2e
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uforum", "-pforum-e2e"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  # 서버가 보내는 인증·재설정 메일을 받아 HTTP API(18025)로 보여 준다.
+  mailpit:
+    image: axllent/mailpit
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "18025:8025"
+
+  server:
+    build: ../../forum_server
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    ports:
+      - "18081:8081"
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/forum?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: forum
+      DB_PASSWORD: forum-e2e
+      JWT_SECRET: e2e-only-jwt-secret-at-least-32-bytes-long
+      MAIL_USERNAME: noreply@forum.test
+      MAIL_PASSWORD: e2e
+      APP_BASE_URL: http://localhost:3100
+      CORS_ALLOWED_ORIGINS: http://localhost:3100
+      APP_UPLOAD_DIR: /tmp/uploads
+      APP_RATE_LIMIT_ENABLED: "false"
+      # Mailpit은 STARTTLS가 없다. 맵 속성은 환경 변수로 정확히 못 넘겨 JSON으로 준다.
+      SPRING_APPLICATION_JSON: '{"spring.mail.host":"mailpit","spring.mail.port":1025,"spring.mail.properties.mail.smtp.starttls.enable":false,"spring.mail.properties.mail.smtp.starttls.required":false}'
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8081'"]
+      interval: 3s
+      timeout: 3s
+      retries: 100

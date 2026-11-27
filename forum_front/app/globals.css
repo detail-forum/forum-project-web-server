@@ -214,3 +214,10 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(59, 130, 246, 0.2) transparent;
 }
+
+/* 다크 ↔ 라이트 전환 때 화면이 천천히 바뀐다. utils/theme.ts의 setThemeMode가 이 클래스를 붙였다 뗀다. */
+html.theme-fade::view-transition-old(root),
+html.theme-fade::view-transition-new(root) {
+  animation-duration: 0.8s;
+  animation-timing-function: ease-in-out;
+}

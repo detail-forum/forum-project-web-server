@@ -121,43 +121,4 @@ public class ImageUploadController {
             return ResponseEntity.status(500).body(ApiResponse.fail("이미지 업로드 중 오류가 발생했습니다."));
         }
     }
-
-    /**
-     * 이미지 삭제
-     * DELETE /upload/image/{filename}
-     */
-    @DeleteMapping("/image/{filename}")
-    public ResponseEntity<ApiResponse<Void>> deleteImage(@PathVariable String filename) {
-        try {
-            // 인증 확인
-            var authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
-                return ResponseEntity.status(401).body(ApiResponse.fail("인증이 필요합니다."));
-            }
-
-            Path filePath;
-            try {
-                filePath = ImageFiles.resolveInside(Paths.get(uploadDir), filename);
-            } catch (IllegalArgumentException ex) {
-                return ResponseEntity.badRequest().body(ApiResponse.fail("잘못된 파일명입니다."));
-            }
-            
-            // 파일 존재 확인
-            if (!Files.exists(filePath)) {
-                return ResponseEntity.status(404).body(ApiResponse.fail("파일을 찾을 수 없습니다."));
-            }
-
-            // 파일 삭제
-            Files.delete(filePath);
-
-            log.info("이미지 삭제 성공: {}", filename);
-
-            return ResponseEntity.ok(ApiResponse.ok("이미지 삭제 성공"));
-
-        } catch (IOException e) {
-            log.error("이미지 삭제 실패", e);
-            return ResponseEntity.status(500).body(ApiResponse.fail("이미지 삭제 중 오류가 발생했습니다."));
-        }
-    }
 }
-

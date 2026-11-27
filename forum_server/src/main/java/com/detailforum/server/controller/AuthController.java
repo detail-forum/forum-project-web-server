@@ -211,7 +211,7 @@ public class AuthController {
     @PostMapping("/resend-verification")
     public ResponseEntity<ApiResponse<Void>> resendVerificationEmail(@RequestParam String email) {
         authService.resendVerificationEmail(email);
-        return ResponseEntity.ok(ApiResponse.ok("인증 메일이 재발송되었습니다."));
+        return ResponseEntity.ok(ApiResponse.ok("인증이 필요한 계정이라면 인증 메일이 재발송되었습니다."));
     }
 
     /** ✅ 비밀번호 재설정 메일 요청. 가입 여부와 관계없이 같은 응답을 준다. */

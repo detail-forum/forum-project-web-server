@@ -318,14 +318,12 @@ public class AuthService {
         authRepository.save(user);
     }
 
-    /** ✅ 이메일 인증 메일 재발송 */
+    /** ✅ 이메일 인증 메일 재발송. 가입·인증 여부를 드러내지 않도록 보낼 대상이 아니면 조용히 끝낸다. */
     @Transactional
     public void resendVerificationEmail(String email) {
-        Users user = authRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("해당 이메일로 가입된 계정을 찾을 수 없습니다."));
-
-        if (user.isEmailVerified()) {
-            throw new IllegalArgumentException("이미 인증된 이메일입니다.");
+        Users user = authRepository.findByEmail(email).orElse(null);
+        if (user == null || user.isDeleted() || user.isEmailVerified()) {
+            return;
         }
 
         // 새 인증 토큰 생성
@@ -338,7 +336,6 @@ public class AuthService {
     }
 
     /** ✅ 비밀번호 재설정 메일 발송. 가입 여부를 드러내지 않도록 없는 이메일도 조용히 끝낸다. */
-    // shortcut: 요청 횟수 제한 없음, 같은 주소로 반복 요청이 들어오면 IP/이메일별 제한을 추가한다.
     @Transactional
     public void requestPasswordReset(String email) {
         Users user = authRepository.findByEmail(email).orElse(null);

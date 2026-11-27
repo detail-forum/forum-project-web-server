@@ -17,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -31,6 +30,7 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class DirectChatService {
 
+    private final CurrentUser currentUser;
     private final DirectChatMessageRepository messageRepository;
     private final DirectChatReadStatusRepository readStatusRepository;
     private final DirectChatRoomRepository roomRepository;
@@ -143,30 +143,7 @@ public class DirectChatService {
     }
 
     private Users getCurrentUser() {
-        try {
-            var authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null) {
-                log.error("SecurityContext에 인증 정보가 없습니다.");
-                throw new ResourceNotFoundException("인증이 필요합니다.");
-            }
-
-            String username = authentication.getName();
-            if (username == null || "anonymousUser".equals(username)) {
-                log.error("인증되지 않은 사용자입니다. username: {}", username);
-                throw new ResourceNotFoundException("인증이 필요합니다.");
-            }
-
-            return userRepository.findByUsername(username)
-                    .orElseThrow(() -> {
-                        log.error("인증 사용자 정보를 찾을 수 없습니다: {}", username);
-                        return new ResourceNotFoundException("인증 사용자 정보를 찾을 수 없습니다: " + username);
-                    });
-        } catch (ResourceNotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("getCurrentUser 실패: {}", e.getMessage(), e);
-            throw new ResourceNotFoundException("인증 정보를 확인할 수 없습니다.");
-        }
+        return currentUser.require();
     }
 
     @Transactional

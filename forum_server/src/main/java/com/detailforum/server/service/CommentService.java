@@ -14,9 +14,7 @@ import com.detailforum.server.repository.CommentLikeRepository;
 import com.detailforum.server.repository.CommentRepository;
 import com.detailforum.server.repository.GroupPostRepository;
 import com.detailforum.server.repository.PostRepository;
-import com.detailforum.server.repository.UserRepository;
 import lombok.AllArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,24 +26,18 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class CommentService {
 
+    private final CurrentUser currentUser;
     private final CommentRepository commentRepository;
     private final CommentLikeRepository commentLikeRepository;
     private final PostRepository postRepository;
     private final GroupPostRepository groupPostRepository;
-    private final UserRepository userRepository;
     private final NotificationService notificationService;
 
     /**
      * 현재 인증된 사용자 정보 가져오기 (인증 필수)
      */
     private Users getCurrentUser() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null || "anonymousUser".equals(authentication.getName())) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
-        }
-        String username = authentication.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
+        return currentUser.require();
     }
 
     /**

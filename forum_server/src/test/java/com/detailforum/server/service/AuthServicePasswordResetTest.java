@@ -93,6 +93,19 @@ class AuthServicePasswordResetTest {
         assertThat(user.getPassword()).isEqualTo("old");
     }
 
+    @Test
+    void resendVerificationRevealsNothingForUnknownOrVerifiedEmail() {
+        when(authRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
+        Users verified = user();
+        verified.setEmailVerified(true);
+        when(authRepository.findByEmail("a@example.com")).thenReturn(Optional.of(verified));
+
+        authService.resendVerificationEmail("nobody@example.com");
+        authService.resendVerificationEmail("a@example.com");
+
+        verify(emailService, never()).sendVerificationEmail(anyString(), anyString(), anyString());
+    }
+
     private Users user() {
         return Users.builder().id(1L).username("alice").email("a@example.com")
                 .nickname("alice").password("old").build();

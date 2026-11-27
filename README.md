@@ -213,7 +213,7 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8081/ws
 
 ## 📚 API 문서
 
-백엔드 서버 실행 후 Swagger UI에서 API 문서를 확인할 수 있습니다:
+백엔드 서버를 `SWAGGER_ENABLED=true`로 실행하면 Swagger UI에서 API 문서를 확인할 수 있습니다 (기본값은 꺼짐):
 
 ```
 http://localhost:8081/swagger-ui.html
@@ -227,6 +227,21 @@ http://localhost:8081/swagger-ui.html
 - **댓글**: `/api/comment/*`
 - **사용자**: `/api/user/*`
 - **WebSocket**: `/ws`
+
+## 🧪 E2E 테스트
+
+브라우저 → Next.js → Spring 서버 → MySQL, 메일은 Mailpit까지 실제로 띄워서 가입·메일 인증·로그인·글/댓글을 확인합니다. Docker가 필요합니다.
+
+```bash
+cd forum_front
+npx playwright install chromium   # 처음 한 번
+npm run test:e2e                  # 백엔드 컨테이너를 띄우고, 끝나면 지운다
+E2E_KEEP=1 npm run test:e2e       # 실패 원인을 보려고 컨테이너를 남긴다 (Mailpit: http://localhost:18025)
+```
+
+사용 포트: 3100(프론트), 18081(서버), 18025(Mailpit). 설정은 `forum_front/e2e/docker-compose.yml`에 있습니다.
+
+Jenkins에서는 이미지 빌드 뒤 `E2E` 단계가 같은 테스트를 돌리고, 실패하면 배포하지 않습니다. 이때는 Docker 대신 MySQL·Mailpit·백엔드를 한 파드에 띄우고 `E2E_BACKEND=external`로 붙습니다.
 
 ## 🚢 배포
 

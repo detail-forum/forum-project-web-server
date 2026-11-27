@@ -14,6 +14,7 @@ import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { getUsernameFromToken } from '@/utils/jwt'
 import ReportButton from '@/components/ReportButton'
+import { safeHref } from '@/utils/safeHref'
 
 export default function PostDetailPage() {
   const params = useParams()
@@ -428,7 +429,7 @@ export default function PostDetailPage() {
           parts.push(
             <a
               key={`link-${keyCounter++}`}
-              href={match.url}
+              href={safeHref(match.url)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"

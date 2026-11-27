@@ -34,17 +34,31 @@ export function getThemeMode(): ThemeMode {
   }
 }
 
+function isDark(mode: ThemeMode) {
+  return mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+}
+
 export function setThemeMode(mode: ThemeMode) {
-  try {
-    if (mode === 'system') localStorage.removeItem(STORAGE_KEY)
-    else localStorage.setItem(STORAGE_KEY, mode)
-  } catch {
-    // 저장이 막힌 브라우저(사생활 보호 모드 등)에서는 이번 화면에만 적용된다.
-    document.documentElement.dataset.theme =
-      mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        ? 'dark'
-        : 'light'
+  const root = document.documentElement
+  const apply = () => {
+    try {
+      if (mode === 'system') localStorage.removeItem(STORAGE_KEY)
+      else localStorage.setItem(STORAGE_KEY, mode)
+    } catch {
+      // 저장이 막힌 브라우저(사생활 보호 모드 등)에서는 이번 화면에만 적용된다.
+      root.dataset.theme = isDark(mode) ? 'dark' : 'light'
+      return
+    }
+    window.__applyTheme?.()
+  }
+
+  // 밝기가 실제로 바뀔 때 화면이 천천히 밝아지거나 어두워지게 한다. 지원하지 않는 브라우저나 동작 줄이기 설정이면 바로 바꾼다.
+  const changing = (root.dataset.theme === 'dark') !== isDark(mode)
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (!changing || reduceMotion || !document.startViewTransition) {
+    apply()
     return
   }
-  window.__applyTheme?.()
+  root.classList.add('theme-fade')
+  document.startViewTransition(apply).finished.finally(() => root.classList.remove('theme-fade'))
 }

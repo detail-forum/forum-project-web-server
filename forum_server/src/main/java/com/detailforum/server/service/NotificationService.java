@@ -12,7 +12,6 @@ import com.detailforum.server.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +22,7 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class NotificationService {
 
+    private final CurrentUser currentUser;
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final PostRepository postRepository;
@@ -33,14 +33,7 @@ public class NotificationService {
      * 현재 인증된 사용자 정보 가져오기
      */
     private Users getCurrentUser() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null
-                || "anonymousUser".equals(authentication.getName())) {
-            throw new ApplicationUnauthorizedException("인증이 필요합니다.");
-        }
-        String username = authentication.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("유저를 찾을 수 없습니다."));
+        return currentUser.require();
     }
 
     /**

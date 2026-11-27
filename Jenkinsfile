@@ -73,6 +73,66 @@ spec:
             }
         }
 
+        // 서비스 전체 e2e. 방금 만든 백엔드 이미지를 MySQL·Mailpit과 한 파드에 띄우고 Playwright가 localhost로 붙는다.
+        // 실패하면 배포하지 않는다. 로컬에서는 forum_front에서 npm run test:e2e (docker compose 사용).
+        stage('E2E') {
+            steps {
+                script {
+                    podTemplate(namespace: 'ci', yaml: """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: playwright
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
+      command: [cat]
+      tty: true
+    - name: mysql
+      image: mysql:8.4
+      env:
+        - { name: MYSQL_ROOT_PASSWORD, value: e2e-root }
+        - { name: MYSQL_DATABASE, value: forum }
+        - { name: MYSQL_USER, value: forum }
+        - { name: MYSQL_PASSWORD, value: forum-e2e }
+    - name: mailpit
+      image: axllent/mailpit
+      env:
+        - { name: MP_SMTP_AUTH_ACCEPT_ANY, value: "1" }
+        - { name: MP_SMTP_AUTH_ALLOW_INSECURE, value: "1" }
+    - name: backend
+      image: ${env.PULL_REGISTRY}/forum-backend:${env.TAG}
+      # 파드 안 컨테이너는 동시에 뜬다. DB가 열리기 전에 Spring이 시작하면 죽으므로 기다린다.
+      command: [bash, -c, 'until </dev/tcp/127.0.0.1/3306; do sleep 2; done; sleep 5; exec java -jar /app/app.jar']
+      env:
+        - { name: DB_URL, value: "jdbc:mysql://127.0.0.1:3306/forum?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8" }
+        - { name: DB_USERNAME, value: forum }
+        - { name: DB_PASSWORD, value: forum-e2e }
+        - { name: JWT_SECRET, value: e2e-only-jwt-secret-at-least-32-bytes-long }
+        - { name: MAIL_USERNAME, value: noreply@forum.test }
+        - { name: MAIL_PASSWORD, value: e2e }
+        - { name: APP_BASE_URL, value: "http://localhost:3100" }
+        - { name: CORS_ALLOWED_ORIGINS, value: "http://localhost:3100" }
+        - { name: APP_UPLOAD_DIR, value: /tmp/uploads }
+        - { name: APP_RATE_LIMIT_ENABLED, value: "false" }
+        - name: SPRING_APPLICATION_JSON
+          value: '{"spring.mail.host":"127.0.0.1","spring.mail.port":1025,"spring.mail.properties.mail.smtp.starttls.enable":false,"spring.mail.properties.mail.smtp.starttls.required":false}'
+""") {
+                        node(POD_LABEL) {
+                            checkout scm
+                            container('playwright') {
+                                sh '''
+                                    cd forum_front
+                                    npm ci
+                                    E2E_BACKEND=external E2E_API_URL=http://localhost:8081 E2E_MAILPIT_URL=http://localhost:8025 CI=1 \
+                                      npx playwright test
+                                '''
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy') {
             steps {
                 container('kubectl') {

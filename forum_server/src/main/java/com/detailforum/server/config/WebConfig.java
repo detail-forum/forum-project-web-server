@@ -36,7 +36,7 @@ public class WebConfig {
                 // /uploads/ 경로로 요청이 오면 업로드 디렉토리의 파일을 제공
                 String uploadPath = Paths.get(uploadDir).toUri().toString();
                 registry.addResourceHandler("/uploads/**")
-                        .addResourceLocations("file:" + uploadPath)
+                        .addResourceLocations(uploadPath) // toUri()가 이미 file: 스킴을 붙인다
                         .setCachePeriod(86400); // 24시간 캐싱
                 
                 // /api/로 시작하는 경로는 정적 리소스 핸들러에서 제외
